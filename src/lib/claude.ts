@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import DOMMatrix from 'dommatrix'
 import { createRequire } from 'module'
 
 const anthropic = new Anthropic({
@@ -6,6 +7,10 @@ const anthropic = new Anthropic({
 })
 
 const require = createRequire(import.meta.url)
+
+if (!(globalThis as { DOMMatrix?: typeof DOMMatrix }).DOMMatrix) {
+  ;(globalThis as { DOMMatrix?: typeof DOMMatrix }).DOMMatrix = DOMMatrix
+}
 
 export interface AnalysisResult {
   type: string

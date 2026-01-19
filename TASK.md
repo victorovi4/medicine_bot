@@ -45,3 +45,4 @@
 - Нужно подтвердить формат тестов для TS-проекта (pytest vs JS)
 - Принудительно выставлен node runtime для `/api/analyze` (pdf-parse)
 - Исправлен импорт `pdf-parse` через `createRequire`
+- Добавлен полифилл `DOMMatrix` (dommatrix) для pdf-parse
