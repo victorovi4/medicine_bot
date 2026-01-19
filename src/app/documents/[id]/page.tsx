@@ -124,7 +124,7 @@ export default async function DocumentPage({
             <div>
               <h3 className="font-semibold mb-2">Теги</h3>
               <div className="flex flex-wrap gap-2">
-                {document.tags.map((tag) => (
+                {document.tags.map((tag: string) => (
                   <Badge key={tag} variant="secondary">
                     {tag}
                   </Badge>
