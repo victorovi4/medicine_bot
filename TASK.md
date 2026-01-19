@@ -46,3 +46,4 @@
 - Принудительно выставлен node runtime для `/api/analyze` (pdf-parse)
 - Исправлен импорт `pdf-parse` через `createRequire`
 - Добавлен полифилл `DOMMatrix` (dommatrix) для pdf-parse
+- Переведён pdf-parse на API v2 (PDFParse.getText)

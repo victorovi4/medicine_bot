@@ -1,12 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk'
 import DOMMatrix from 'dommatrix'
-import { createRequire } from 'module'
+import { PDFParse } from 'pdf-parse'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
-
-const require = createRequire(import.meta.url)
 
 if (!(globalThis as { DOMMatrix?: typeof DOMMatrix }).DOMMatrix) {
   ;(globalThis as { DOMMatrix?: typeof DOMMatrix }).DOMMatrix = DOMMatrix
@@ -163,18 +161,9 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
   const arrayBuffer = await response.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  let pdfParse: (buffer: Buffer) => Promise<{ text: string }>
-  try {
-    const pdfParseModule = require('pdf-parse') as unknown as {
-      default?: (buffer: Buffer) => Promise<{ text: string }>
-    }
-    pdfParse = (pdfParseModule.default ?? pdfParseModule) as typeof pdfParse
-  } catch (error) {
-    console.error('pdf-parse import error:', error)
-    throw new Error('pdf-parse not available')
-  }
-
-  const pdfData = await pdfParse(buffer)
+  const parser = new PDFParse({ data: buffer })
+  const pdfData = await parser.getText()
+  await parser.destroy()
   const text = pdfData.text
 
   if (text.trim().length < 50) {
