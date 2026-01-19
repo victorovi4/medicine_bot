@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/db'
 import { PatientHeader } from '@/components/PatientHeader'
+import { DocumentActions } from '@/components/DocumentActions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -33,13 +34,15 @@ export default async function DocumentPage({
     <main className="container mx-auto px-4 py-8 max-w-4xl">
       <PatientHeader />
       
-      <div className="mb-6">
+      <div className="flex items-center justify-between mb-6">
         <Link href="/">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Назад к истории
           </Button>
         </Link>
+        
+        <DocumentActions documentId={document.id} documentTitle={document.title} />
       </div>
       
       <Card>

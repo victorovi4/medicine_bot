@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,7 +30,37 @@ interface AnalysisResult {
   confidence: number
 }
 
-export function DocumentForm() {
+interface DocumentData {
+  id: string
+  date: string
+  type: string
+  title: string
+  doctor?: string | null
+  specialty?: string | null
+  clinic?: string | null
+  summary?: string | null
+  content?: string | null
+  tags?: string[]
+  keyValues?: Record<string, string> | null
+  fileUrl?: string | null
+  fileName?: string | null
+  fileType?: string | null
+}
+
+interface DocumentFormProps {
+  /** Данные документа для режима редактирования */
+  initialData?: DocumentData
+  /** Режим формы: create или edit */
+  mode?: 'create' | 'edit'
+}
+
+/**
+ * Форма для создания или редактирования медицинского документа.
+ * Args:
+ *   initialData (DocumentData): Начальные данные документа (для редактирования).
+ *   mode ('create' | 'edit'): Режим формы.
+ */
+export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
@@ -56,6 +86,32 @@ export function DocumentForm() {
     tags: '',
     keyValues: {} as Record<string, string>,
   })
+
+  // Инициализация формы данными документа при редактировании
+  useEffect(() => {
+    if (initialData && mode === 'edit') {
+      setFormData({
+        date: initialData.date.split('T')[0],
+        type: initialData.type,
+        title: initialData.title,
+        doctor: initialData.doctor || '',
+        specialty: initialData.specialty || '',
+        clinic: initialData.clinic || '',
+        summary: initialData.summary || '',
+        content: initialData.content || '',
+        tags: initialData.tags?.join(', ') || '',
+        keyValues: (initialData.keyValues as Record<string, string>) || {},
+      })
+
+      if (initialData.fileUrl) {
+        setFileData({
+          url: initialData.fileUrl,
+          fileName: initialData.fileName || 'Файл',
+          fileType: initialData.fileType || '',
+        })
+      }
+    }
+  }, [initialData, mode])
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -138,28 +194,46 @@ export function DocumentForm() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
-          keyValues:
-            Object.keys(formData.keyValues).length > 0
-              ? formData.keyValues
-              : null,
-          fileUrl: fileData?.url,
-          fileName: fileData?.fileName,
-          fileType: fileData?.fileType,
-        }),
-      })
+      const documentPayload = {
+        ...formData,
+        tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
+        keyValues:
+          Object.keys(formData.keyValues).length > 0
+            ? formData.keyValues
+            : null,
+        fileUrl: fileData?.url,
+        fileName: fileData?.fileName,
+        fileType: fileData?.fileType,
+      }
 
-      if (!response.ok) throw new Error('Failed to create document')
+      let response: Response
 
-      router.push('/')
+      if (mode === 'edit' && initialData) {
+        // PUT запрос для обновления
+        response = await fetch(`/api/documents/${initialData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(documentPayload),
+        })
+      } else {
+        // POST запрос для создания
+        response = await fetch('/api/documents', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(documentPayload),
+        })
+      }
+
+      if (!response.ok) throw new Error('Failed to save document')
+
+      if (mode === 'edit' && initialData) {
+        router.push(`/documents/${initialData.id}`)
+      } else {
+        router.push('/')
+      }
       router.refresh()
     } catch (error) {
-      console.error('Error creating document:', error)
+      console.error('Error saving document:', error)
       alert('Ошибка при сохранении документа')
     } finally {
       setLoading(false)
@@ -364,10 +438,12 @@ export function DocumentForm() {
         <div className="space-y-2">
           <Label>
             Ключевые показатели
-            <Badge variant="secondary" className="ml-2">
-              <Sparkles className="h-3 w-3 mr-1" />
-              AI
-            </Badge>
+            {analysisSuccess && (
+              <Badge variant="secondary" className="ml-2">
+                <Sparkles className="h-3 w-3 mr-1" />
+                AI
+              </Badge>
+            )}
           </Label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {Object.entries(formData.keyValues).map(([key, value]) => (
@@ -389,6 +465,15 @@ export function DocumentForm() {
               </div>
             ))}
           </div>
+          <Button type="button" variant="outline" size="sm" onClick={handleAddKeyValue}>
+            + Добавить показатель
+          </Button>
+        </div>
+      )}
+
+      {Object.keys(formData.keyValues).length === 0 && (
+        <div className="space-y-2">
+          <Label>Ключевые показатели</Label>
           <Button type="button" variant="outline" size="sm" onClick={handleAddKeyValue}>
             + Добавить показатель
           </Button>
@@ -444,6 +529,8 @@ export function DocumentForm() {
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               Сохранение...
             </>
+          ) : mode === 'edit' ? (
+            'Сохранить изменения'
           ) : (
             'Сохранить документ'
           )}
