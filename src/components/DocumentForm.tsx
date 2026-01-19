@@ -91,12 +91,22 @@ export function DocumentForm() {
         }),
       })
 
+      const analyzeText = await analyzeResponse.text()
+      const analyzeData = analyzeText ? JSON.parse(analyzeText) : null
+
       if (!analyzeResponse.ok) {
-        const errorData = await analyzeResponse.json()
-        throw new Error(errorData.error || 'Analysis failed')
+        const errorMessage =
+          analyzeData && typeof analyzeData === 'object' && 'error' in analyzeData
+            ? String((analyzeData as { error?: string }).error)
+            : 'Analysis failed'
+        throw new Error(errorMessage)
       }
 
-      const analysis: AnalysisResult = await analyzeResponse.json()
+      if (!analyzeData) {
+        throw new Error('Empty analysis response')
+      }
+
+      const analysis: AnalysisResult = analyzeData as AnalysisResult
 
       setFormData({
         date: analysis.date || new Date().toISOString().split('T')[0],
