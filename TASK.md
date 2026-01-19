@@ -40,7 +40,7 @@
 - Prisma генерирует предупреждение о `--no-engine` в production — можно игнорировать для MVP
 - Vercel сборка требует `prisma generate` — добавлен `postinstall`
 - Добавлен fallback для Prisma URL на `PRISMA_DATABASE_URL`/`POSTGRES_URL`
-- Добавлен `vercel-build` со `prisma db push` для создания таблиц
+- `vercel-build` без `prisma db push` из-за P1001 в Vercel
 - Убрана обязательная `DIRECT_URL`, чтобы сборка проходила без неё
 - Нужно подтвердить формат тестов для TS-проекта (pytest vs JS)
 - Принудительно выставлен node runtime для `/api/analyze` (pdf-parse)
