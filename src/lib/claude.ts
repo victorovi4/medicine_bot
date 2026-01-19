@@ -1,8 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { createRequire } from 'module'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
+
+const require = createRequire(import.meta.url)
 
 export interface AnalysisResult {
   type: string
@@ -157,11 +160,12 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
 
   let pdfParse: (buffer: Buffer) => Promise<{ text: string }>
   try {
-    const pdfParseModule = await import('pdf-parse')
-    const resolved = (pdfParseModule as unknown as { default?: typeof pdfParseModule })
-      .default
-    pdfParse = (resolved ?? (pdfParseModule as unknown)) as typeof pdfParse
-  } catch {
+    const pdfParseModule = require('pdf-parse') as unknown as {
+      default?: (buffer: Buffer) => Promise<{ text: string }>
+    }
+    pdfParse = (pdfParseModule.default ?? pdfParseModule) as typeof pdfParse
+  } catch (error) {
+    console.error('pdf-parse import error:', error)
     throw new Error('pdf-parse not available')
   }
 
