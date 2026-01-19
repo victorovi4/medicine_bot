@@ -36,3 +36,4 @@
 ## Обнаружено в процессе работы
 
 - Prisma генерирует предупреждение о `--no-engine` в production — можно игнорировать для MVP
+- Vercel сборка требует `prisma generate` — добавлен `postinstall`
