@@ -38,3 +38,4 @@
 - Prisma генерирует предупреждение о `--no-engine` в production — можно игнорировать для MVP
 - Vercel сборка требует `prisma generate` — добавлен `postinstall`
 - Добавлен fallback для Prisma URL на `PRISMA_DATABASE_URL`/`POSTGRES_URL`
+- Добавлен `vercel-build` со `prisma db push` для создания таблиц
