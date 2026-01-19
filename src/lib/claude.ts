@@ -1,5 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { createRequire } from 'module'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -145,7 +144,8 @@ async function analyzeImage(
 }
 
 /**
- * Анализирует PDF (если в нём есть текст).
+ * Анализирует PDF напрямую через Claude (без pdf-parse).
+ * Claude умеет читать PDF как document.
  * Args:
  *   pdfUrl (string): URL PDF.
  * Returns:
@@ -154,25 +154,7 @@ async function analyzeImage(
 async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
   const response = await fetch(pdfUrl)
   const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
-
-  let pdfParse: (data: Buffer) => Promise<{ text: string }>
-  try {
-    const require = createRequire(import.meta.url)
-    pdfParse = require('pdf-parse') as typeof pdfParse
-  } catch (error) {
-    console.error('pdf-parse import error:', error)
-    throw new Error('pdf-parse not available')
-  }
-
-  const pdfData = await pdfParse(buffer)
-  const text = pdfData.text
-
-  if (text.trim().length < 50) {
-    throw new Error(
-      'PDF appears to be scanned. Please upload as image (JPG/PNG) for better analysis.'
-    )
-  }
+  const base64 = Buffer.from(arrayBuffer).toString('base64')
 
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -180,7 +162,20 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
     messages: [
       {
         role: 'user',
-        content: `${ANALYSIS_PROMPT}\n\n---\n\nТекст документа:\n\n${text.substring(0, 15000)}`,
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: base64,
+            },
+          },
+          {
+            type: 'text',
+            text: ANALYSIS_PROMPT,
+          },
+        ],
       },
     ],
   })
