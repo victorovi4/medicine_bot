@@ -1,36 +1,119 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Медицинская карта — Иоффе В.Б.
 
-## Getting Started
+Персональная электронная медицинская карта для хранения и отображения медицинских документов в хронологическом порядке.
 
-First, run the development server:
+## Возможности
+
+- 📋 Хранение медицинских документов (анализы, УЗИ, КТ, МРТ, консультации, выписки)
+- 📅 Хронологическое отображение (Timeline)
+- 📁 Загрузка файлов (PDF, изображения)
+- 🔍 Просмотр документов с превью файлов
+- 🏷️ Теги для категоризации
+
+## Стек технологий
+
+- **Next.js 14** — App Router
+- **TypeScript** — типизация
+- **Prisma** — ORM
+- **Vercel Postgres** — база данных
+- **Vercel Blob** — хранилище файлов
+- **Tailwind CSS** — стили
+- **shadcn/ui** — UI компоненты
+
+## Установка
 
 ```bash
+# Клонировать репозиторий
+git clone <repo-url>
+cd medical-card
+
+# Установить зависимости
+npm install
+
+# Настроить переменные окружения
+cp .env.example .env.local
+# Заполнить значения DATABASE_URL, DIRECT_URL, BLOB_READ_WRITE_TOKEN
+
+# Сгенерировать Prisma клиент
+npx prisma generate
+
+# Применить схему к базе данных
+npx prisma db push
+
+# Запустить dev-сервер
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Переменные окружения
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Создайте файл `.env.local` со следующими переменными:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```env
+# Vercel Postgres
+DATABASE_URL="postgres://..."
+DIRECT_URL="postgres://..."
 
-## Learn More
+# Vercel Blob
+BLOB_READ_WRITE_TOKEN="..."
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Деплой на Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Создайте репозиторий на GitHub
+2. Импортируйте проект на [vercel.com](https://vercel.com)
+3. Добавьте Vercel Postgres (Storage → Create → Postgres)
+4. Добавьте Vercel Blob (Storage → Create → Blob)
+5. Vercel автоматически добавит переменные окружения
+6. В Build Settings измените Build Command на:
+   ```
+   prisma generate && prisma db push && next build
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Структура проекта
 
-## Deploy on Vercel
+```
+src/
+├── app/
+│   ├── api/documents/     # API для документов
+│   ├── api/upload/        # API для загрузки файлов
+│   ├── add/               # Страница добавления
+│   ├── documents/[id]/    # Страница просмотра
+│   └── page.tsx           # Главная (timeline)
+├── components/
+│   ├── ui/                # shadcn компоненты
+│   ├── PatientHeader.tsx
+│   ├── DocumentCard.tsx
+│   ├── Timeline.tsx
+│   └── DocumentForm.tsx
+└── lib/
+    ├── db.ts              # Prisma клиент
+    ├── types.ts           # Типы и константы
+    └── utils.ts           # Утилиты
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Разработка
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+# Dev-сервер
+npm run dev
+
+# Сборка
+npm run build
+
+# Линтинг
+npm run lint
+
+# Prisma Studio (GUI для БД)
+npx prisma studio
+```
+
+## Roadmap
+
+- [x] **Этап 1:** MVP — базовый функционал
+- [ ] **Этап 2:** AI-анализ документов (Claude API)
+- [ ] **Этап 3:** Telegram-бот для загрузки
+- [ ] **Этап 4:** Авторизация, фильтры, графики
+
+## Лицензия
+
+Приватный проект

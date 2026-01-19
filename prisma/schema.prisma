@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  
+  // Основная информация
+  date      DateTime                    // Дата документа (когда сделан анализ/приём)
+  type      String                      // Тип: "анализ", "узи", "консультация", "выписка", "исследование"
+  title     String                      // Заголовок: "Биохимия крови", "КТ брюшной полости"
+  
+  // Где и кто
+  doctor    String?                     // ФИО врача
+  specialty String?                     // Специальность: "уролог", "онколог", "терапевт"
+  clinic    String?                     // Медучреждение
+  
+  // Содержимое
+  summary   String?  @db.Text           // Краткое резюме (AI заполнит в Этапе 2)
+  content   String?  @db.Text           // Полный текст/расшифровка
+  
+  // Файл
+  fileUrl   String?                     // URL файла в Vercel Blob
+  fileName  String?                     // Оригинальное имя файла
+  fileType  String?                     // MIME тип: "application/pdf", "image/jpeg"
+  
+  // Структурированные данные
+  tags      String[]                    // Теги: ["онкология", "ПСА", "простата"]
+  keyValues Json?                       // Ключевые показатели: {"ПСА": "4.5 нг/мл", "гемоглобин": "130 г/л"}
+  
+  // Мета
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([date])
+  @@index([type])
+}
