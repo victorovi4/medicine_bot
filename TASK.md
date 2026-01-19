@@ -39,3 +39,4 @@
 - Vercel сборка требует `prisma generate` — добавлен `postinstall`
 - Добавлен fallback для Prisma URL на `PRISMA_DATABASE_URL`/`POSTGRES_URL`
 - Добавлен `vercel-build` со `prisma db push` для создания таблиц
+- Убрана обязательная `DIRECT_URL`, чтобы сборка проходила без неё
