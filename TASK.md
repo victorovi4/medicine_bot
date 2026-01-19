@@ -45,8 +45,6 @@
 - Нужно подтвердить формат тестов для TS-проекта (pytest vs JS)
 - Принудительно выставлен node runtime для `/api/analyze` (pdf-parse)
 - Исправлен импорт `pdf-parse` через `createRequire`
-- Добавлен полифилл `DOMMatrix` (dommatrix) для pdf-parse
-- Переведён pdf-parse на API v2 (PDFParse.getText)
 - Обработка пустого ответа /api/analyze на клиенте
 - Откат pdf-parse на v1.1.1 (без worker) из-за ошибки с pdf.worker.mjs
-- Динамическая инициализация DOMMatrix перед import pdf-parse
+- Перевёл загрузку pdf-parse на CJS require внутри analyzePdf
