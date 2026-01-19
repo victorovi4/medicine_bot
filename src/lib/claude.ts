@@ -1,8 +1,27 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Модель Claude через OpenRouter
+const MODEL = 'anthropic/claude-sonnet-4'
+
+// Ленивая инициализация клиента (чтобы не падать при билде)
+let _openrouter: OpenAI | null = null
+
+function getOpenRouter(): OpenAI {
+  if (!_openrouter) {
+    if (!process.env.OPENROUTER_API_KEY) {
+      throw new Error('OPENROUTER_API_KEY is not configured')
+    }
+    _openrouter = new OpenAI({
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: process.env.OPENROUTER_API_KEY,
+      defaultHeaders: {
+        'HTTP-Referer': process.env.VERCEL_URL || 'http://localhost:3000',
+        'X-Title': 'Medical Card',
+      },
+    })
+  }
+  return _openrouter
+}
 
 export interface AnalysisResult {
   type: string
@@ -63,7 +82,7 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
 Верни ТОЛЬКО валидный JSON без markdown-форматирования, без \`\`\`json, просто чистый JSON объект.`
 
 /**
- * Анализирует документ по URL и типу файла.
+ * Анализирует документ по URL и типу файла через OpenRouter.
  * Args:
  *   fileUrl (string): Публичный URL файла в Vercel Blob.
  *   fileType (string): MIME-тип файла.
@@ -74,10 +93,7 @@ export async function analyzeDocument(
   fileUrl: string,
   fileType: string
 ): Promise<AnalysisResult> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not configured')
-  }
-
+  // Проверка ключа происходит в getOpenRouter()
   if (fileType.startsWith('image/')) {
     return analyzeImage(fileUrl, fileType)
   }
@@ -90,7 +106,7 @@ export async function analyzeDocument(
 }
 
 /**
- * Анализирует изображение через Claude Vision.
+ * Анализирует изображение через OpenRouter (Claude Vision).
  * Args:
  *   imageUrl (string): URL изображения.
  *   mediaType (string): MIME-тип изображения.
@@ -101,29 +117,23 @@ async function analyzeImage(
   imageUrl: string,
   mediaType: string
 ): Promise<AnalysisResult> {
+  // Скачиваем изображение и конвертируем в base64 data URL
   const response = await fetch(imageUrl)
   const arrayBuffer = await response.arrayBuffer()
   const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const dataUrl = `data:${mediaType};base64,${base64}`
 
-  let claudeMediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' =
-    'image/jpeg'
-  if (mediaType.includes('png')) claudeMediaType = 'image/png'
-  if (mediaType.includes('gif')) claudeMediaType = 'image/gif'
-  if (mediaType.includes('webp')) claudeMediaType = 'image/webp'
-
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const completion = await getOpenRouter().chat.completions.create({
+    model: MODEL,
     max_tokens: 2000,
     messages: [
       {
         role: 'user',
         content: [
           {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: claudeMediaType,
-              data: base64,
+            type: 'image_url',
+            image_url: {
+              url: dataUrl,
             },
           },
           {
@@ -135,42 +145,43 @@ async function analyzeImage(
     ],
   })
 
-  const textContent = message.content.find((content) => content.type === 'text')
-  if (!textContent || textContent.type !== 'text') {
-    throw new Error('No text response from Claude')
+  const textContent = completion.choices[0]?.message?.content
+  if (!textContent) {
+    throw new Error('No response from OpenRouter')
   }
 
-  return parseAnalysisJson(textContent.text)
+  return parseAnalysisJson(textContent)
 }
 
 /**
- * Анализирует PDF напрямую через Claude (без pdf-parse).
- * Claude умеет читать PDF как document.
+ * Анализирует PDF через OpenRouter.
+ * Конвертируем PDF в base64 и отправляем как file URL.
  * Args:
  *   pdfUrl (string): URL PDF.
  * Returns:
  *   AnalysisResult: Результат анализа.
  */
 async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
+  // Скачиваем PDF и конвертируем в base64 data URL
   const response = await fetch(pdfUrl)
   const arrayBuffer = await response.arrayBuffer()
   const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const dataUrl = `data:application/pdf;base64,${base64}`
 
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
+  const completion = await getOpenRouter().chat.completions.create({
+    model: MODEL,
     max_tokens: 2000,
     messages: [
       {
         role: 'user',
         content: [
           {
-            type: 'document',
-            source: {
-              type: 'base64',
-              media_type: 'application/pdf',
-              data: base64,
+            type: 'file',
+            file: {
+              filename: 'document.pdf',
+              file_data: dataUrl,
             },
-          },
+          } as OpenAI.Chat.Completions.ChatCompletionContentPart,
           {
             type: 'text',
             text: ANALYSIS_PROMPT,
@@ -180,27 +191,38 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
     ],
   })
 
-  const textContent = message.content.find((content) => content.type === 'text')
-  if (!textContent || textContent.type !== 'text') {
-    throw new Error('No text response from Claude')
+  const textContent = completion.choices[0]?.message?.content
+  if (!textContent) {
+    throw new Error('No response from OpenRouter')
   }
 
-  return parseAnalysisJson(textContent.text)
+  return parseAnalysisJson(textContent)
 }
 
 /**
- * Парсит JSON-ответ Claude.
+ * Парсит JSON-ответ от модели.
  * Args:
  *   rawText (string): Текст ответа.
  * Returns:
  *   AnalysisResult: Распарсенный JSON.
  */
 function parseAnalysisJson(rawText: string): AnalysisResult {
-  const jsonStr = rawText.trim()
+  // Убираем возможные markdown-обёртки
+  let jsonStr = rawText.trim()
+  if (jsonStr.startsWith('```json')) {
+    jsonStr = jsonStr.slice(7)
+  } else if (jsonStr.startsWith('```')) {
+    jsonStr = jsonStr.slice(3)
+  }
+  if (jsonStr.endsWith('```')) {
+    jsonStr = jsonStr.slice(0, -3)
+  }
+  jsonStr = jsonStr.trim()
+
   try {
     return JSON.parse(jsonStr) as AnalysisResult
   } catch (error) {
-    console.error('Failed to parse Claude response as JSON:', error)
-    throw new Error('Claude returned invalid JSON')
+    console.error('Failed to parse response as JSON:', error, 'Raw:', rawText)
+    throw new Error('Model returned invalid JSON')
   }
 }
