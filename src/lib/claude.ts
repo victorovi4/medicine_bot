@@ -155,9 +155,12 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
   const arrayBuffer = await response.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  let pdfParse: typeof import('pdf-parse')
+  let pdfParse: (buffer: Buffer) => Promise<{ text: string }>
   try {
-    pdfParse = (await import('pdf-parse')).default
+    const pdfParseModule = await import('pdf-parse')
+    const resolved = (pdfParseModule as unknown as { default?: typeof pdfParseModule })
+      .default
+    pdfParse = (resolved ?? (pdfParseModule as unknown)) as typeof pdfParse
   } catch {
     throw new Error('pdf-parse not available')
   }
