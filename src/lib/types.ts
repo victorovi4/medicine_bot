@@ -39,7 +39,7 @@ export function normalizeDocumentType(rawType: string): DocumentType {
   if (exactMatch) return exactMatch.value
   
   // Поиск по вхождению ключевых слов
-  if (normalized.includes('анализ') || normalized.includes('кровь') || normalized.includes('моч') || normalized.includes('кал')) {
+  if (normalized.includes('анализ') || normalized.includes('кровь') || normalized.includes('моч') || normalized.includes('кал') || normalized.includes('биохим')) {
     return 'анализ'
   }
   if (normalized.includes('узи') || normalized.includes('ультразвук')) {
