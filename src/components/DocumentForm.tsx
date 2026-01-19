@@ -191,9 +191,17 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log('Form submitted, mode:', mode)
     setLoading(true)
 
     try {
+      // Используем fileData если есть, иначе данные из initialData
+      const fileInfo = fileData || (initialData ? {
+        url: initialData.fileUrl || undefined,
+        fileName: initialData.fileName || undefined,
+        fileType: initialData.fileType || undefined,
+      } : {})
+
       const documentPayload = {
         ...formData,
         tags: formData.tags.split(',').map((t) => t.trim()).filter(Boolean),
@@ -201,15 +209,18 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
           Object.keys(formData.keyValues).length > 0
             ? formData.keyValues
             : null,
-        fileUrl: fileData?.url,
-        fileName: fileData?.fileName,
-        fileType: fileData?.fileType,
+        fileUrl: fileInfo.url,
+        fileName: fileInfo.fileName,
+        fileType: fileInfo.fileType,
       }
+
+      console.log('Sending payload:', documentPayload)
 
       let response: Response
 
       if (mode === 'edit' && initialData) {
         // PUT запрос для обновления
+        console.log('PUT to:', `/api/documents/${initialData.id}`)
         response = await fetch(`/api/documents/${initialData.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -224,7 +235,13 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
         })
       }
 
-      if (!response.ok) throw new Error('Failed to save document')
+      console.log('Response status:', response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        throw new Error(`Failed to save document: ${errorText}`)
+      }
 
       if (mode === 'edit' && initialData) {
         router.push(`/documents/${initialData.id}`)
