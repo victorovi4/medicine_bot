@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { DOCUMENT_TYPES, SPECIALTIES } from '@/lib/types'
+import { DOCUMENT_TYPES, SPECIALTIES, normalizeDocumentType } from '@/lib/types'
 import { AlertCircle, CheckCircle2, Loader2, Sparkles, Upload } from 'lucide-react'
 
 interface AnalysisResult {
@@ -90,9 +90,12 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
   // Инициализация формы данными документа при редактировании
   useEffect(() => {
     if (initialData && mode === 'edit') {
+      // Нормализуем тип к допустимому значению
+      const normalizedType = normalizeDocumentType(initialData.type)
+      
       setFormData({
         date: initialData.date.split('T')[0],
-        type: initialData.type,
+        type: normalizedType,
         title: initialData.title,
         doctor: initialData.doctor || '',
         specialty: initialData.specialty || '',
@@ -163,10 +166,13 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
       }
 
       const analysis: AnalysisResult = analyzeData as AnalysisResult
+      
+      // Нормализуем тип от AI к допустимому значению
+      const normalizedType = normalizeDocumentType(analysis.type || '')
 
       setFormData({
         date: analysis.date || new Date().toISOString().split('T')[0],
-        type: analysis.type || '',
+        type: normalizedType,
         title: analysis.title || '',
         doctor: analysis.doctor || '',
         specialty: analysis.specialty || '',
