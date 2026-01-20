@@ -12,7 +12,8 @@ const databaseUrl =
 
 const testDatabaseUrl =
   process.env.TEST_DATABASE_URL ??
-  process.env.TEST_PRISMA_DATABASE_URL ??
+  process.env.TEST_POSTGRES_POSTGRES_URL ??
+  process.env.TEST_POSTGRES_PRISMA_DATABASE_URL ??
   process.env.TEST_POSTGRES_URL
 
 export const prisma =
