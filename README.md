@@ -66,6 +66,9 @@ BLOB_READ_WRITE_TOKEN="vercel_blob_..."
 # OpenRouter API (для AI-анализа)
 OPENROUTER_API_KEY="sk-or-..."
 
+# Отдельная тестовая база для e2e (prod test-mode)
+TEST_DATABASE_URL="postgres://..."
+
 # Telegram Bot
 TELEGRAM_BOT_TOKEN="7123456789:AAH..."
 
@@ -144,6 +147,24 @@ npm run test:e2e
 # Все тесты
 npm run test:all
 ```
+
+### Test-mode на проде (изолированная база)
+
+Для безопасного запуска e2e на проде используется отдельная база данных:
+
+1. Создайте отдельную БД (например, в Vercel Postgres)
+2. Добавьте переменную окружения:
+   - `TEST_DATABASE_URL` — URL тестовой базы
+3. Запускайте e2e с test‑header:
+
+```bash
+E2E_BASE_URL="https://medicine-bot-4xqt.vercel.app" \
+E2E_TEST_MODE="true" \
+npm run test:e2e
+```
+
+При `E2E_TEST_MODE=true` все запросы идут с заголовком `x-test-mode: true`,
+а сервер использует `TEST_DATABASE_URL` вместо основной базы.
 
 ## 📱 Telegram-бот
 

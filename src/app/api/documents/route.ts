@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getPrismaClient } from '@/lib/db'
+import { isTestModeRequest } from '@/lib/test-mode'
 
 // GET — получить все документы
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
     const documents = await prisma.document.findMany({
       orderBy: { date: 'desc' },
     })
@@ -17,6 +19,7 @@ export async function GET() {
 // POST — создать новый документ
 export async function POST(request: NextRequest) {
   try {
+    const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
     const body = await request.json()
     
     const document = await prisma.document.create({

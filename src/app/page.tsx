@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { prisma } from '@/lib/db'
+import { getPrismaClient } from '@/lib/db'
+import { isTestModeServerComponent } from '@/lib/test-mode'
 import { PatientHeader } from '@/components/PatientHeader'
 import { Timeline } from '@/components/Timeline'
 import { Button } from '@/components/ui/button'
@@ -8,6 +9,7 @@ import { Plus } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
+  const prisma = getPrismaClient({ testMode: isTestModeServerComponent() })
   const documents = await prisma.document.findMany({
     orderBy: { date: 'desc' },
   })

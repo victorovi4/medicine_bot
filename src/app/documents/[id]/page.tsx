@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { prisma } from '@/lib/db'
+import { getPrismaClient } from '@/lib/db'
+import { isTestModeServerComponent } from '@/lib/test-mode'
 import { PatientHeader } from '@/components/PatientHeader'
 import { DocumentActions } from '@/components/DocumentActions'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,7 @@ export default async function DocumentPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const prisma = getPrismaClient({ testMode: isTestModeServerComponent() })
   const document = await prisma.document.findUnique({
     where: { id },
   })

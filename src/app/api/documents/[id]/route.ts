@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getPrismaClient } from '@/lib/db'
+import { isTestModeRequest } from '@/lib/test-mode'
 
 // GET — получить один документ
 export async function GET(
@@ -7,6 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
     const { id } = await params
     const document = await prisma.document.findUnique({
       where: { id },
@@ -29,6 +31,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
     const { id } = await params
     const body = await request.json()
     
@@ -64,6 +67,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
     const { id } = await params
     await prisma.document.delete({
       where: { id },
