@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:e2e:prod": "E2E_BASE_URL=https://medicine-bot-4xqt.vercel.app E2E_TEST_MODE=true playwright test --project=chromium",
     "test:all": "npm run test && npm run test:e2e"
   },
   "dependencies": {
