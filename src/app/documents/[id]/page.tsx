@@ -17,7 +17,8 @@ export default async function DocumentPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const prisma = getPrismaClient({ testMode: isTestModeServerComponent() })
+  const testMode = await isTestModeServerComponent()
+  const prisma = getPrismaClient({ testMode })
   const document = await prisma.document.findUnique({
     where: { id },
   })

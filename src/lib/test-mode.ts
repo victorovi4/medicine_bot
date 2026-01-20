@@ -29,14 +29,16 @@ export function isTestModeRequest(request: NextRequest): boolean {
 /**
  * Определяет test-mode в Server Components (SSR).
  * Returns:
- *   boolean: true если включён test-mode.
+ *   Promise<boolean>: true если включён test-mode.
  */
-export function isTestModeServerComponent(): boolean {
-  const headerValue = headers().get(TEST_MODE_HEADER)
+export async function isTestModeServerComponent(): Promise<boolean> {
+  const headerStore = await headers()
+  const headerValue = headerStore.get(TEST_MODE_HEADER)
   if (headerValue && headerValue.toLowerCase() === 'true') {
     return true
   }
 
-  const cookieValue = cookies().get(TEST_MODE_COOKIE)?.value
+  const cookieStore = await cookies()
+  const cookieValue = cookieStore.get(TEST_MODE_COOKIE)?.value
   return cookieValue === '1'
 }

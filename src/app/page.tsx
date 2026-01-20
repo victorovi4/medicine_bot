@@ -9,7 +9,8 @@ import { Plus } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
-  const prisma = getPrismaClient({ testMode: isTestModeServerComponent() })
+  const testMode = await isTestModeServerComponent()
+  const prisma = getPrismaClient({ testMode })
   const documents = await prisma.document.findMany({
     orderBy: { date: 'desc' },
   })
