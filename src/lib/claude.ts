@@ -284,8 +284,12 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
  *   AnalysisResult: Распарсенный JSON.
  */
 function parseAnalysisJson(rawText: string): AnalysisResult {
-  // Убираем возможные markdown-обёртки
+  console.log('Raw AI response length:', rawText.length)
+  console.log('Raw AI response (first 500 chars):', rawText.substring(0, 500))
+  
   let jsonStr = rawText.trim()
+  
+  // Убираем возможные markdown-обёртки
   if (jsonStr.startsWith('```json')) {
     jsonStr = jsonStr.slice(7)
   } else if (jsonStr.startsWith('```')) {
@@ -296,15 +300,47 @@ function parseAnalysisJson(rawText: string): AnalysisResult {
   }
   jsonStr = jsonStr.trim()
 
+  // Попытка 1: прямой парсинг
   try {
     const parsed = JSON.parse(jsonStr)
-    // Гарантируем что recommendations всегда массив
     if (!Array.isArray(parsed.recommendations)) {
       parsed.recommendations = []
     }
     return parsed as AnalysisResult
-  } catch (error) {
-    console.error('Failed to parse response as JSON:', error, 'Raw:', rawText)
-    throw new Error('Model returned invalid JSON')
+  } catch {
+    console.log('Direct parse failed, trying to extract JSON...')
+  }
+
+  // Попытка 2: найти JSON объект в тексте
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0])
+      if (!Array.isArray(parsed.recommendations)) {
+        parsed.recommendations = []
+      }
+      console.log('Extracted JSON successfully')
+      return parsed as AnalysisResult
+    } catch {
+      console.log('Extracted JSON also invalid')
+    }
+  }
+
+  // Попытка 3: вернуть базовый результат с текстом как summary
+  console.error('All JSON parse attempts failed. Raw text:', rawText.substring(0, 1000))
+  
+  return {
+    type: 'другое',
+    title: 'Документ (требует ручной обработки)',
+    date: new Date().toISOString().split('T')[0],
+    doctor: null,
+    specialty: null,
+    clinic: null,
+    summary: rawText.substring(0, 500) + (rawText.length > 500 ? '...' : ''),
+    conclusion: null,
+    recommendations: [],
+    keyValues: {},
+    tags: ['требует проверки'],
+    confidence: 0.3,
   }
 }
