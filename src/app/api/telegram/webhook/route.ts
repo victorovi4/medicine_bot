@@ -327,11 +327,11 @@ async function processBatch(chatId: number): Promise<void> {
     
     const pdfBytes = await pdfDoc.save()
     
-    // Загружаем PDF в Blob
+    // Загружаем PDF в Blob (конвертируем Uint8Array в Buffer)
     const timestamp = Date.now()
     const blobName = `documents/tg-${timestamp}-combined.pdf`
     
-    const pdfBlob = await put(blobName, pdfBytes, {
+    const pdfBlob = await put(blobName, Buffer.from(pdfBytes), {
       access: 'public',
       contentType: 'application/pdf',
     })
