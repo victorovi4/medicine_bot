@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
+import { PDFDocument } from 'pdf-lib'
 import { prisma } from '@/lib/db'
 import { analyzeDocument, analyzeMultipleImages, AnalysisResult } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
@@ -297,14 +298,62 @@ async function processBatch(chatId: number): Promise<void> {
   )
 
   try {
+    // Создаём PDF из всех страниц
+    await sendMessage(chatId, '📑 Объединяю страницы в PDF...')
+    
+    const pdfDoc = await PDFDocument.create()
+    
+    for (const page of pages) {
+      const response = await fetch(page.fileUrl)
+      const imageBytes = await response.arrayBuffer()
+      
+      // Определяем тип изображения и встраиваем
+      let image
+      if (page.fileType.includes('png')) {
+        image = await pdfDoc.embedPng(imageBytes)
+      } else {
+        image = await pdfDoc.embedJpg(imageBytes)
+      }
+      
+      // Создаём страницу с размером изображения
+      const pdfPage = pdfDoc.addPage([image.width, image.height])
+      pdfPage.drawImage(image, {
+        x: 0,
+        y: 0,
+        width: image.width,
+        height: image.height,
+      })
+    }
+    
+    const pdfBytes = await pdfDoc.save()
+    
+    // Загружаем PDF в Blob
+    const timestamp = Date.now()
+    const blobName = `documents/tg-${timestamp}-combined.pdf`
+    
+    const pdfBlob = await put(blobName, pdfBytes, {
+      access: 'public',
+      contentType: 'application/pdf',
+    })
+    
+    console.log('Created combined PDF:', pdfBlob.url)
+
     await sendMessage(chatId, '🤖 AI анализирует документ...')
 
     // AI-анализ всех страниц
     const images = pages.map((p) => ({ url: p.fileUrl, mediaType: p.fileType }))
     const analysis = await analyzeMultipleImages(images)
 
-    // Проверяем дубликаты и сохраняем
-    await checkDuplicatesAndSave(chatId, analysis, pages[0].fileUrl, pageCount)
+    // Сохраняем с URL объединённого PDF
+    await checkDuplicatesAndSave(
+      chatId, 
+      analysis, 
+      pdfBlob.url,  // URL объединённого PDF
+      pageCount,
+      undefined,
+      `telegram-${timestamp}-combined.pdf`,
+      'application/pdf'
+    )
   } catch (error) {
     console.error('Batch processing error:', error)
     const msg = error instanceof Error ? error.message : 'Неизвестная ошибка'
