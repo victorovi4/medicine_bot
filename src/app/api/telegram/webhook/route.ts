@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
 
       if (existing) {
         const count = await prisma.batchPending.count({
-          where: { chatId: BigInt(chatId) },
+          where: { chatId: BigInt(chatId), fileUrl: { not: '__batch_marker__' } },
         })
         await sendMessage(
           chatId,
@@ -135,6 +135,14 @@ export async function POST(request: NextRequest) {
             `/cancel — отменить`
         )
       } else {
+        // Создаём маркер активного batch
+        await prisma.batchPending.create({
+          data: {
+            chatId: BigInt(chatId),
+            fileUrl: '__batch_marker__',
+            fileType: 'marker',
+          },
+        })
         await sendMessage(
           chatId,
           `📎 Режим сбора страниц включён!\n\n` +
@@ -146,12 +154,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (message.text === '/cancel') {
+      // Считаем страницы (без маркера)
+      const pageCount = await prisma.batchPending.count({
+        where: { chatId: BigInt(chatId), fileUrl: { not: '__batch_marker__' } },
+      })
+      
       const deleted = await prisma.batchPending.deleteMany({
         where: { chatId: BigInt(chatId) },
       })
 
       if (deleted.count > 0) {
-        await sendMessage(chatId, `❌ Сбор отменён. Удалено ${deleted.count} страниц.`)
+        await sendMessage(chatId, `❌ Сбор отменён.${pageCount > 0 ? ` Удалено ${pageCount} страниц.` : ''}`)
       } else {
         await sendMessage(chatId, `ℹ️ Нет активного сбора страниц.`)
       }
@@ -237,7 +250,7 @@ async function addToBatch(
     })
 
     const count = await prisma.batchPending.count({
-      where: { chatId: BigInt(chatId) },
+      where: { chatId: BigInt(chatId), fileUrl: { not: '__batch_marker__' } },
     })
 
     await sendMessage(chatId, `✅ Страница ${count} добавлена. Ещё? Или /done`)
@@ -251,17 +264,28 @@ async function addToBatch(
  * Обработать собранный batch.
  */
 async function processBatch(chatId: number): Promise<void> {
+  // Получаем страницы (без маркера)
   const pages = await prisma.batchPending.findMany({
-    where: { chatId: BigInt(chatId) },
+    where: { chatId: BigInt(chatId), fileUrl: { not: '__batch_marker__' } },
     orderBy: { receivedAt: 'asc' },
   })
 
   if (pages.length === 0) {
-    await sendMessage(chatId, 'ℹ️ Нет страниц для обработки. Сначала /batch')
+    // Проверяем, был ли вообще активный batch
+    const hasMarker = await prisma.batchPending.findFirst({
+      where: { chatId: BigInt(chatId), fileUrl: '__batch_marker__' },
+    })
+    
+    if (hasMarker) {
+      await prisma.batchPending.deleteMany({ where: { chatId: BigInt(chatId) } })
+      await sendMessage(chatId, 'ℹ️ Вы не добавили ни одной страницы. Режим сбора отключён.')
+    } else {
+      await sendMessage(chatId, 'ℹ️ Нет страниц для обработки. Сначала /batch')
+    }
     return
   }
 
-  // Удаляем из pending
+  // Удаляем все записи (включая маркер)
   await prisma.batchPending.deleteMany({
     where: { chatId: BigInt(chatId) },
   })
