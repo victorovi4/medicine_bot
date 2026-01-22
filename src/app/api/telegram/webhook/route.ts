@@ -574,7 +574,7 @@ async function handleCallbackQuery(
         fileName: docData.fileName,
         fileType: docData.fileType,
         tags: docData.tags || [],
-        keyValues: docData.keyValues,
+        keyValues: docData.keyValues || undefined,
       },
     })
 
@@ -615,7 +615,7 @@ async function handleCallbackQuery(
         fileName: docData.fileName,
         fileType: docData.fileType,
         tags: docData.tags || [],
-        keyValues: docData.keyValues,
+        keyValues: docData.keyValues || undefined,
       },
     })
 
