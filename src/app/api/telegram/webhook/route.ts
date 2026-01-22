@@ -539,22 +539,33 @@ async function handleCallbackQuery(
     data?: string
   }
 ): Promise<void> {
+  console.log('Callback received:', callback.data)
+  
   await answerCallbackQuery(callback.id)
 
-  if (!callback.data || !callback.message) return
+  if (!callback.data || !callback.message) {
+    console.log('No callback data or message')
+    return
+  }
 
   const [action, pendingId] = callback.data.split(':')
   const chatId = callback.message.chat.id
   const messageId = callback.message.message_id
 
-  const pending = await prisma.pendingDocument.findUnique({
-    where: { id: pendingId },
-  })
+  console.log('Processing action:', action, 'pendingId:', pendingId)
 
-  if (!pending) {
-    await editMessage(chatId, messageId, '⏰ Время действия истекло.')
-    return
-  }
+  try {
+    const pending = await prisma.pendingDocument.findUnique({
+      where: { id: pendingId },
+    })
+
+    if (!pending) {
+      console.log('Pending document not found')
+      await editMessage(chatId, messageId, '⏰ Время действия истекло.')
+      return
+    }
+    
+    console.log('Found pending document, duplicateId:', pending.duplicateId)
 
   const docData = pending.documentData as {
     date: string
@@ -653,6 +664,14 @@ async function handleCallbackQuery(
         `📅 ${docData.date?.split('T')[0]}\n\n` +
         `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${pending.duplicateId}`
     )
+  }
+  } catch (error) {
+    console.error('Callback query error:', error)
+    try {
+      await editMessage(chatId, messageId, `❌ Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+    } catch {
+      // ignore edit error
+    }
   }
 }
 
