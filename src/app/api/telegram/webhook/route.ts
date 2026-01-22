@@ -732,11 +732,27 @@ async function handleCallbackQuery(
 
   if (action === 'replace') {
     // Заменить существующий
+    console.log('Replace action started, duplicateId:', pending.duplicateId)
+    
     if (!pending.duplicateId) {
       await editMessage(chatId, messageId, '❌ Ошибка: дубликат не найден.')
       return
     }
 
+    // Проверяем, существует ли документ для замены
+    const existingDoc = await prisma.document.findUnique({
+      where: { id: pending.duplicateId },
+    })
+    
+    if (!existingDoc) {
+      console.log('Document to replace not found:', pending.duplicateId)
+      await editMessage(chatId, messageId, '❌ Документ для замены уже удалён.')
+      await prisma.pendingDocument.delete({ where: { id: pendingId } })
+      return
+    }
+
+    console.log('Updating document:', pending.duplicateId)
+    
     await prisma.document.update({
       where: { id: pending.duplicateId },
       data: {
@@ -758,8 +774,10 @@ async function handleCallbackQuery(
       },
     })
 
+    console.log('Document updated, deleting pending')
     await prisma.pendingDocument.delete({ where: { id: pendingId } })
 
+    console.log('Sending success message')
     await editMessage(
       chatId,
       messageId,
@@ -768,6 +786,7 @@ async function handleCallbackQuery(
         `📅 ${docData.date?.split('T')[0]}\n\n` +
         `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${pending.duplicateId}`
     )
+    
     // Отправляем сообщение с клавиатурой
     await sendMessage(chatId, '📂 Готов к новым документам!', {
       reply_markup: {
@@ -778,13 +797,30 @@ async function handleCallbackQuery(
         resize_keyboard: true,
       },
     })
+    console.log('Replace completed successfully')
+    return
   }
   } catch (error) {
     console.error('Callback query error:', error)
+    // Пытаемся отправить сообщение об ошибке пользователю
     try {
       await editMessage(chatId, messageId, `❌ Ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+    } catch (editError) {
+      console.error('Failed to edit message with error:', editError)
+    }
+    // Также отправляем новое сообщение, если edit не сработал
+    try {
+      await sendMessage(chatId, `❌ Произошла ошибка при обработке. Попробуйте ещё раз.`, {
+        reply_markup: {
+          keyboard: [
+            [{ text: '📎 Много фото' }],
+            [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+          ],
+          resize_keyboard: true,
+        },
+      })
     } catch {
-      // ignore edit error
+      // ignore
     }
   }
 }
