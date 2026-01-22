@@ -45,6 +45,8 @@ export async function PUT(
         specialty: body.specialty,
         clinic: body.clinic,
         summary: body.summary,
+        conclusion: body.conclusion,
+        recommendations: body.recommendations,
         content: body.content,
         fileUrl: body.fileUrl,
         fileName: body.fileName,

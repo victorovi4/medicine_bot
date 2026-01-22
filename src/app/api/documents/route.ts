@@ -31,6 +31,8 @@ export async function POST(request: NextRequest) {
         specialty: body.specialty || null,
         clinic: body.clinic || null,
         summary: body.summary || null,
+        conclusion: body.conclusion || null,
+        recommendations: body.recommendations || [],
         content: body.content || null,
         fileUrl: body.fileUrl || null,
         fileName: body.fileName || null,

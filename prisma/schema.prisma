@@ -21,7 +21,9 @@ model Document {
   clinic    String?                     // Медучреждение
   
   // Содержимое
-  summary   String?  @db.Text           // Краткое резюме (AI заполнит в Этапе 2)
+  summary   String?  @db.Text           // AI-резюме (краткий пересказ)
+  conclusion String? @db.Text           // Заключение врача (дословная цитата из документа)
+  recommendations String[] @default([]) // Рекомендации врача (список задач для пациента)
   content   String?  @db.Text           // Полный текст/расшифровка
   
   // Файл

@@ -25,6 +25,8 @@ interface AnalysisResult {
   specialty: string | null
   clinic: string | null
   summary: string
+  conclusion: string | null
+  recommendations: string[]
   keyValues: Record<string, string>
   tags: string[]
   confidence: number
@@ -39,6 +41,8 @@ interface DocumentData {
   specialty?: string | null
   clinic?: string | null
   summary?: string | null
+  conclusion?: string | null
+  recommendations?: string[]
   content?: string | null
   tags?: string[]
   keyValues?: Record<string, string> | null
@@ -82,6 +86,8 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
     specialty: '',
     clinic: '',
     summary: '',
+    conclusion: '',
+    recommendations: [] as string[],
     content: '',
     tags: '',
     keyValues: {} as Record<string, string>,
@@ -101,6 +107,8 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
         specialty: initialData.specialty || '',
         clinic: initialData.clinic || '',
         summary: initialData.summary || '',
+        conclusion: initialData.conclusion || '',
+        recommendations: initialData.recommendations || [],
         content: initialData.content || '',
         tags: initialData.tags?.join(', ') || '',
         keyValues: (initialData.keyValues as Record<string, string>) || {},
@@ -178,6 +186,8 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
         specialty: analysis.specialty || '',
         clinic: analysis.clinic || '',
         summary: analysis.summary || '',
+        conclusion: analysis.conclusion || '',
+        recommendations: analysis.recommendations || [],
         content: '',
         tags: analysis.tags?.join(', ') || '',
         keyValues: analysis.keyValues || {},
@@ -439,8 +449,78 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="conclusion">
+          Заключение врача (дословно)
+          {analysisSuccess && formData.conclusion && (
+            <Badge variant="secondary" className="ml-2">
+              <Sparkles className="h-3 w-3 mr-1" />
+              AI
+            </Badge>
+          )}
+        </Label>
+        <Textarea
+          id="conclusion"
+          rows={4}
+          placeholder="Официальное заключение из документа (дословная цитата)"
+          value={formData.conclusion}
+          onChange={(e) => setFormData({ ...formData, conclusion: e.target.value })}
+          className="bg-amber-50 border-amber-200"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>
+          Рекомендации
+          {analysisSuccess && formData.recommendations.length > 0 && (
+            <Badge variant="secondary" className="ml-2">
+              <Sparkles className="h-3 w-3 mr-1" />
+              AI
+            </Badge>
+          )}
+        </Label>
+        <div className="space-y-2">
+          {formData.recommendations.map((rec, index) => (
+            <div key={index} className="flex gap-2 items-start">
+              <span className="bg-green-200 text-green-800 rounded-full w-6 h-6 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-1">
+                {index + 1}
+              </span>
+              <Input
+                value={rec}
+                onChange={(e) => {
+                  const newRecs = [...formData.recommendations]
+                  newRecs[index] = e.target.value
+                  setFormData({ ...formData, recommendations: newRecs })
+                }}
+                className="bg-green-50 border-green-200"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const newRecs = formData.recommendations.filter((_, i) => i !== index)
+                  setFormData({ ...formData, recommendations: newRecs })
+                }}
+                className="text-red-500 hover:text-red-700"
+              >
+                ×
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setFormData({ ...formData, recommendations: [...formData.recommendations, ''] })}
+          >
+            + Добавить рекомендацию
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="summary">
-          Краткое резюме
+          AI-резюме (краткий пересказ)
           {analysisSuccess && (
             <Badge variant="secondary" className="ml-2">
               <Sparkles className="h-3 w-3 mr-1" />
@@ -454,6 +534,7 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
           placeholder="Краткое описание результатов (2-3 предложения)"
           value={formData.summary}
           onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+          className="bg-blue-50 border-blue-200"
         />
       </div>
 

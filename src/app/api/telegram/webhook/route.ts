@@ -202,6 +202,8 @@ async function processPhoto(
         specialty: analysis.specialty,
         clinic: analysis.clinic,
         summary: analysis.summary,
+        conclusion: analysis.conclusion,
+        recommendations: analysis.recommendations || [],
         content: caption || null,
         fileUrl: blob.url,
         fileName: `telegram-${timestamp}.jpg`,
@@ -301,6 +303,8 @@ async function processDocument(
         specialty: analysis.specialty,
         clinic: analysis.clinic,
         summary: analysis.summary,
+        conclusion: analysis.conclusion,
+        recommendations: analysis.recommendations || [],
         content: caption || null,
         fileUrl: blob.url,
         fileName: fileName,
@@ -331,6 +335,8 @@ async function sendSuccessMessage(
     type?: string
     doctor?: string | null
     summary?: string
+    conclusion?: string | null
+    recommendations?: string[]
     keyValues?: Record<string, string>
   },
   documentId: string
@@ -347,8 +353,22 @@ async function sendSuccessMessage(
     response += `👨‍⚕️ Врач: ${analysis.doctor}\n`
   }
 
+  // Заключение врача (дословное)
+  if (analysis.conclusion) {
+    response += `\n📜 Заключение врача:\n${analysis.conclusion}\n`
+  }
+
+  // Рекомендации
+  if (analysis.recommendations && analysis.recommendations.length > 0) {
+    response += `\n✅ Рекомендации:\n`
+    for (let i = 0; i < analysis.recommendations.length; i++) {
+      response += `${i + 1}. ${analysis.recommendations[i]}\n`
+    }
+  }
+
+  // AI-резюме
   if (analysis.summary) {
-    response += `\n📝 Резюме:\n${analysis.summary}\n`
+    response += `\n🤖 AI-резюме:\n${analysis.summary}\n`
   }
 
   // Ключевые показатели

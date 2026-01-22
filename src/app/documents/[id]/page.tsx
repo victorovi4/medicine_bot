@@ -7,7 +7,7 @@ import { DocumentActions } from '@/components/DocumentActions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Calendar, User, Building, FileText, Download } from 'lucide-react'
+import { ArrowLeft, Calendar, User, Building, FileText, Download, Sparkles, ClipboardList, CheckCircle2 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -90,20 +90,54 @@ export default async function DocumentPage({
             )}
           </div>
           
-          {/* Резюме */}
+          {/* Заключение врача (дословное) */}
+          {document.conclusion && (
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+              <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                <ClipboardList className="h-5 w-5" />
+                Заключение врача
+              </h3>
+              <p className="text-amber-900 whitespace-pre-wrap">{document.conclusion}</p>
+            </div>
+          )}
+          
+          {/* Рекомендации */}
+          {document.recommendations && document.recommendations.length > 0 && (
+            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+              <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5" />
+                Рекомендации
+              </h3>
+              <ul className="space-y-2">
+                {document.recommendations.map((rec: string, index: number) => (
+                  <li key={index} className="flex items-start gap-2 text-green-800">
+                    <span className="bg-green-200 text-green-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
+                      {index + 1}
+                    </span>
+                    <span>{rec}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* AI-резюме */}
           {document.summary && (
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-blue-900 mb-2">Краткое резюме</h3>
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+              <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                AI-резюме
+              </h3>
               <p className="text-blue-800">{document.summary}</p>
             </div>
           )}
           
-          {/* Содержимое */}
+          {/* Полный текст (опционально) */}
           {document.content && (
             <div>
-              <h3 className="font-semibold mb-2">Заключение</h3>
+              <h3 className="font-semibold mb-2">Полный текст</h3>
               <div className="prose prose-sm max-w-none">
-                <p className="whitespace-pre-wrap">{document.content}</p>
+                <p className="whitespace-pre-wrap text-gray-700">{document.content}</p>
               </div>
             </div>
           )}
