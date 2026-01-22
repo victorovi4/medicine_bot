@@ -1,32 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/db'
-import { analyzeDocument, analyzeMultipleImages } from '@/lib/claude'
+import { analyzeDocument, analyzeMultipleImages, AnalysisResult } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import {
   TelegramUpdate,
   sendMessage,
+  editMessage,
+  answerCallbackQuery,
   getFile,
   downloadFile,
   isUserAllowed,
 } from '@/lib/telegram'
 
-// Используем Node.js runtime для работы с файлами
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Время ожидания для сбора фото из media group (в мс)
-const MEDIA_GROUP_WAIT_TIME = 4000
-
 /**
  * Webhook endpoint для Telegram бота.
- * Обрабатывает входящие сообщения и добавляет документы в медкарту.
  */
 export async function POST(request: NextRequest) {
   try {
     const update: TelegramUpdate = await request.json()
 
-    // Обрабатываем только сообщения
+    // Обработка callback_query (нажатие на inline кнопку)
+    if (update.callback_query) {
+      await handleCallbackQuery(update.callback_query)
+      return NextResponse.json({ ok: true })
+    }
+
+    // Обработка сообщений
     if (!update.message) {
       return NextResponse.json({ ok: true })
     }
@@ -41,56 +44,60 @@ export async function POST(request: NextRequest) {
       await sendMessage(
         chatId,
         '⛔ Извините, у вас нет доступа к этому боту.\n\n' +
-          'Если вы член семьи, попросите администратора добавить ваш Telegram ID в список разрешённых.\n' +
           `Ваш ID: ${userId}`
       )
       return NextResponse.json({ ok: true })
     }
 
-    // Команда /start
+    // === КОМАНДЫ ===
+
     if (message.text === '/start') {
       await sendMessage(
         chatId,
         `👋 Привет, ${userName}!\n\n` +
-          `Я помогаю добавлять документы в медицинскую карту Виктора Борисовича.\n\n` +
-          `📄 Отправьте мне фото или PDF медицинского документа (анализ, заключение, выписка), и я:\n` +
-          `1. Проанализирую его с помощью AI\n` +
-          `2. Извлеку ключевую информацию\n` +
-          `3. Добавлю в медицинскую карту\n\n` +
-          `📎 Многостраничный документ: выберите несколько фото в галерее и отправьте разом — я объединю их в один документ.\n\n` +
-          `🔗 Посмотреть карту: ${process.env.NEXT_PUBLIC_APP_URL}\n\n` +
-          `Команды:\n` +
-          `/start — это сообщение\n` +
-          `/status — статистика карты\n` +
-          `/last — последние 5 документов\n` +
-          `/help — справка`
+          `Я помогаю добавлять документы в медицинскую карту.\n\n` +
+          `📄 Отправьте фото или PDF документа.\n\n` +
+          `📎 Многостраничный документ:\n` +
+          `/batch — начать сбор страниц\n` +
+          `[отправляете фото 1, 2, 3...]\n` +
+          `/done — закончить и обработать\n\n` +
+          `🔗 Карта: ${process.env.NEXT_PUBLIC_APP_URL}`
       )
       return NextResponse.json({ ok: true })
     }
 
-    // Команда /status
+    if (message.text === '/help') {
+      await sendMessage(
+        chatId,
+        `📖 Справка\n\n` +
+          `Отправьте фото или PDF документа.\n\n` +
+          `📎 Многостраничный документ:\n` +
+          `/batch — начать сбор страниц\n` +
+          `/done — обработать собранные страницы\n` +
+          `/cancel — отменить сбор\n\n` +
+          `/status — статистика\n` +
+          `/last — последние 5 документов`
+      )
+      return NextResponse.json({ ok: true })
+    }
+
     if (message.text === '/status') {
       const count = await prisma.document.count()
       const lastDoc = await prisma.document.findFirst({
         orderBy: { createdAt: 'desc' },
       })
 
-      let statusText = `📊 Статистика медицинской карты:\n\n`
-      statusText += `📄 Всего документов: ${count}\n`
-
+      let text = `📊 Статистика:\n\n📄 Документов: ${count}\n`
       if (lastDoc) {
         const lastDate = new Date(lastDoc.createdAt).toLocaleDateString('ru-RU')
-        statusText += `📅 Последний добавлен: ${lastDate}\n`
-        statusText += `   "${lastDoc.title}"`
+        text += `📅 Последний: ${lastDate}\n   "${lastDoc.title}"`
       }
+      text += `\n\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}`
 
-      statusText += `\n\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}`
-
-      await sendMessage(chatId, statusText)
+      await sendMessage(chatId, text)
       return NextResponse.json({ ok: true })
     }
 
-    // Команда /last
     if (message.text === '/last') {
       const docs = await prisma.document.findMany({
         take: 5,
@@ -108,34 +115,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Команда /help
-    if (message.text === '/help') {
-      await sendMessage(
-        chatId,
-        `📖 Справка по боту\n\n` +
-          `Отправьте мне фото или PDF документа, и я добавлю его в медицинскую карту.\n\n` +
-          `📎 Многостраничный документ:\n` +
-          `Выберите несколько фото в галерее и отправьте их разом — они будут объединены в один документ.\n\n` +
-          `Команды:\n` +
-          `/start — приветствие\n` +
-          `/status — статистика\n` +
-          `/last — последние 5 документов\n` +
-          `/help — эта справка\n\n` +
-          `💡 Совет: для лучшего распознавания отправляйте документы как файлы (📎), а не сжатые фото.`
-      )
+    // === РЕЖИМ BATCH ===
+
+    if (message.text === '/batch') {
+      // Проверяем, нет ли уже активного batch
+      const existing = await prisma.batchPending.findFirst({
+        where: { chatId: BigInt(chatId) },
+      })
+
+      if (existing) {
+        const count = await prisma.batchPending.count({
+          where: { chatId: BigInt(chatId) },
+        })
+        await sendMessage(
+          chatId,
+          `⚠️ Уже идёт сбор страниц (${count} шт.)\n\n` +
+            `Отправьте ещё фото или:\n` +
+            `/done — обработать\n` +
+            `/cancel — отменить`
+        )
+      } else {
+        await sendMessage(
+          chatId,
+          `📎 Режим сбора страниц включён!\n\n` +
+            `Отправляйте фото страниц документа по одному.\n` +
+            `Когда закончите — нажмите /done`
+        )
+      }
       return NextResponse.json({ ok: true })
     }
 
-    // Обработка фото
+    if (message.text === '/cancel') {
+      const deleted = await prisma.batchPending.deleteMany({
+        where: { chatId: BigInt(chatId) },
+      })
+
+      if (deleted.count > 0) {
+        await sendMessage(chatId, `❌ Сбор отменён. Удалено ${deleted.count} страниц.`)
+      } else {
+        await sendMessage(chatId, `ℹ️ Нет активного сбора страниц.`)
+      }
+      return NextResponse.json({ ok: true })
+    }
+
+    if (message.text === '/done') {
+      await processBatch(chatId)
+      return NextResponse.json({ ok: true })
+    }
+
+    // === ОБРАБОТКА ФОТО ===
+
     if (message.photo && message.photo.length > 0) {
-      // Проверяем, является ли это частью media group
-      if (message.media_group_id) {
-        await handleMediaGroupPhoto(
-          chatId,
-          message.media_group_id,
-          message.photo,
-          message.caption
-        )
+      // Проверяем, активен ли режим batch
+      const batchActive = await prisma.batchPending.findFirst({
+        where: { chatId: BigInt(chatId) },
+      })
+
+      if (batchActive) {
+        // Добавляем в batch
+        await addToBatch(chatId, message.photo, 'image/jpeg')
       } else {
         // Одиночное фото — обрабатываем сразу
         await processPhoto(chatId, message.photo, message.caption)
@@ -143,7 +181,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Обработка документа (PDF)
+    // === ОБРАБОТКА PDF ===
+
     if (message.document) {
       await processDocument(chatId, message.document, message.caption)
       return NextResponse.json({ ok: true })
@@ -153,172 +192,119 @@ export async function POST(request: NextRequest) {
     if (message.text && !message.text.startsWith('/')) {
       await sendMessage(
         chatId,
-        '🤔 Отправьте мне фото или PDF медицинского документа, чтобы я добавил его в карту.\n\n' +
-          'Просто текстовые сообщения я пока не обрабатываю.'
+        '🤔 Отправьте фото или PDF документа.\n\n' +
+          'Для многостраничного документа используйте /batch'
       )
     }
 
     return NextResponse.json({ ok: true })
   } catch (error) {
     console.error('Webhook error:', error)
-    // Всегда возвращаем 200 для Telegram, иначе он будет повторять запросы
     return NextResponse.json({ ok: true })
   }
 }
 
 /**
- * Обработка фото из media group.
- * Сохраняет фото в pending таблицу, первый запрос ждёт и обрабатывает всю группу.
+ * Добавить фото в batch.
  */
-async function handleMediaGroupPhoto(
+async function addToBatch(
   chatId: number,
-  mediaGroupId: string,
-  photos: { file_id: string; width: number; height: number }[],
-  caption?: string
+  photos: { file_id: string }[],
+  fileType: string
 ): Promise<void> {
-  // Берём фото максимального размера
   const photo = photos[photos.length - 1]
 
-  // Сохраняем в pending таблицу
-  await prisma.mediaGroupPending.create({
-    data: {
-      mediaGroupId,
-      chatId: BigInt(chatId),
-      fileId: photo.file_id,
-      fileType: 'image/jpeg',
-    },
-  })
+  try {
+    // Скачиваем и загружаем в Blob сразу
+    const fileInfo = await getFile(photo.file_id)
+    if (!fileInfo.file_path) throw new Error('File path not available')
 
-  // Проверяем, сколько уже есть фото в этой группе
-  const existingCount = await prisma.mediaGroupPending.count({
-    where: { mediaGroupId },
-  })
+    const fileBuffer = await downloadFile(fileInfo.file_path)
+    const timestamp = Date.now()
+    const blobName = `documents/batch-${chatId}-${timestamp}.jpg`
 
-  // Если это первое фото — мы "лидер", будем ждать и обрабатывать
-  if (existingCount === 1) {
-    await sendMessage(chatId, '📥 Получаю страницы документа...')
-
-    // Ждём, пока придут остальные фото группы
-    await new Promise((resolve) => setTimeout(resolve, MEDIA_GROUP_WAIT_TIME))
-
-    // Забираем все фото из группы
-    const pendingPhotos = await prisma.mediaGroupPending.findMany({
-      where: { mediaGroupId },
-      orderBy: { receivedAt: 'asc' },
+    const blob = await put(blobName, fileBuffer, {
+      access: 'public',
+      contentType: fileType,
     })
 
-    if (pendingPhotos.length === 0) {
-      // Кто-то уже обработал (race condition) — выходим
-      return
-    }
-
-    // Удаляем из pending сразу, чтобы другие запросы не пытались обработать
-    await prisma.mediaGroupPending.deleteMany({
-      where: { mediaGroupId },
+    await prisma.batchPending.create({
+      data: {
+        chatId: BigInt(chatId),
+        fileUrl: blob.url,
+        fileType,
+      },
     })
 
-    const photoCount = pendingPhotos.length
-    await sendMessage(
-      chatId,
-      `📄 Получено ${photoCount} ${pluralize(photoCount, 'страница', 'страницы', 'страниц')}. Обрабатываю...`
-    )
+    const count = await prisma.batchPending.count({
+      where: { chatId: BigInt(chatId) },
+    })
 
-    try {
-      // Скачиваем и загружаем все фото
-      const uploadedImages: { url: string; mediaType: string }[] = []
-      const timestamp = Date.now()
-
-      for (let i = 0; i < pendingPhotos.length; i++) {
-        const pending = pendingPhotos[i]
-        const fileInfo = await getFile(pending.fileId)
-        if (!fileInfo.file_path) continue
-
-        const fileBuffer = await downloadFile(fileInfo.file_path)
-        const blobName = `documents/tg-${timestamp}-page${i + 1}.jpg`
-
-        const blob = await put(blobName, fileBuffer, {
-          access: 'public',
-          contentType: 'image/jpeg',
-        })
-
-        uploadedImages.push({
-          url: blob.url,
-          mediaType: 'image/jpeg',
-        })
-      }
-
-      if (uploadedImages.length === 0) {
-        throw new Error('Не удалось загрузить ни одно фото')
-      }
-
-      await sendMessage(chatId, '🤖 Анализирую документ с помощью AI...')
-
-      // AI-анализ всех страниц как одного документа
-      const analysis = await analyzeMultipleImages(uploadedImages)
-
-      // Нормализуем тип документа
-      const normalizedType = normalizeDocumentType(analysis.type || '')
-
-      // Сохраняем в базу (используем URL первой страницы как основной файл)
-      const document = await prisma.document.create({
-        data: {
-          date: analysis.date ? new Date(analysis.date) : new Date(),
-          type: normalizedType,
-          title: analysis.title || 'Многостраничный документ из Telegram',
-          doctor: analysis.doctor,
-          specialty: analysis.specialty,
-          clinic: analysis.clinic,
-          summary: analysis.summary,
-          conclusion: analysis.conclusion,
-          recommendations: analysis.recommendations || [],
-          content: caption || `Документ из ${photoCount} страниц`,
-          fileUrl: uploadedImages[0].url,
-          fileName: `telegram-${timestamp}-multipage.jpg`,
-          fileType: 'image/jpeg',
-          tags: analysis.tags || [],
-          keyValues: analysis.keyValues || null,
-        },
-      })
-
-      // Формируем ответ
-      await sendSuccessMessage(chatId, analysis, document.id, photoCount)
-    } catch (error) {
-      console.error('Media group processing error:', error)
-      const errorMessage =
-        error instanceof Error ? error.message : 'Неизвестная ошибка'
-      await sendMessage(
-        chatId,
-        `❌ Ошибка при обработке документа:\n${errorMessage}\n\n` +
-          `Попробуйте отправить страницы по одной или объединить в PDF.`
-      )
-    }
+    await sendMessage(chatId, `✅ Страница ${count} добавлена. Ещё? Или /done`)
+  } catch (error) {
+    console.error('Add to batch error:', error)
+    await sendMessage(chatId, '❌ Ошибка при добавлении страницы')
   }
-  // Если это не первое фото — просто выходим, лидер обработает всё
 }
 
 /**
- * Обработка одиночного фото из Telegram.
+ * Обработать собранный batch.
+ */
+async function processBatch(chatId: number): Promise<void> {
+  const pages = await prisma.batchPending.findMany({
+    where: { chatId: BigInt(chatId) },
+    orderBy: { receivedAt: 'asc' },
+  })
+
+  if (pages.length === 0) {
+    await sendMessage(chatId, 'ℹ️ Нет страниц для обработки. Сначала /batch')
+    return
+  }
+
+  // Удаляем из pending
+  await prisma.batchPending.deleteMany({
+    where: { chatId: BigInt(chatId) },
+  })
+
+  const pageCount = pages.length
+  await sendMessage(
+    chatId,
+    `📄 Обрабатываю ${pageCount} ${pluralize(pageCount, 'страницу', 'страницы', 'страниц')}...`
+  )
+
+  try {
+    await sendMessage(chatId, '🤖 AI анализирует документ...')
+
+    // AI-анализ всех страниц
+    const images = pages.map((p) => ({ url: p.fileUrl, mediaType: p.fileType }))
+    const analysis = await analyzeMultipleImages(images)
+
+    // Проверяем дубликаты и сохраняем
+    await checkDuplicatesAndSave(chatId, analysis, pages[0].fileUrl, pageCount)
+  } catch (error) {
+    console.error('Batch processing error:', error)
+    const msg = error instanceof Error ? error.message : 'Неизвестная ошибка'
+    await sendMessage(chatId, `❌ Ошибка: ${msg}`)
+  }
+}
+
+/**
+ * Обработка одиночного фото.
  */
 async function processPhoto(
   chatId: number,
-  photos: { file_id: string; width: number; height: number }[],
+  photos: { file_id: string }[],
   caption?: string
 ): Promise<void> {
-  // Берём фото максимального размера (последнее в массиве)
   const photo = photos[photos.length - 1]
 
-  await sendMessage(chatId, '📥 Получил фото, начинаю обработку...')
+  await sendMessage(chatId, '📥 Получил фото, обрабатываю...')
 
   try {
-    // 1. Скачиваем файл из Telegram
     const fileInfo = await getFile(photo.file_id)
-    if (!fileInfo.file_path) {
-      throw new Error('File path not available')
-    }
+    if (!fileInfo.file_path) throw new Error('File path not available')
 
     const fileBuffer = await downloadFile(fileInfo.file_path)
-
-    // 2. Загружаем в Vercel Blob
     const timestamp = Date.now()
     const blobName = `documents/tg-${timestamp}.jpg`
 
@@ -327,51 +313,20 @@ async function processPhoto(
       contentType: 'image/jpeg',
     })
 
-    await sendMessage(chatId, '🤖 Анализирую документ с помощью AI...')
+    await sendMessage(chatId, '🤖 AI анализирует...')
 
-    // 3. AI-анализ
     const analysis = await analyzeDocument(blob.url, 'image/jpeg')
 
-    // Нормализуем тип документа
-    const normalizedType = normalizeDocumentType(analysis.type || '')
-
-    // 4. Сохраняем в базу
-    const document = await prisma.document.create({
-      data: {
-        date: analysis.date ? new Date(analysis.date) : new Date(),
-        type: normalizedType,
-        title: analysis.title || 'Документ из Telegram',
-        doctor: analysis.doctor,
-        specialty: analysis.specialty,
-        clinic: analysis.clinic,
-        summary: analysis.summary,
-        conclusion: analysis.conclusion,
-        recommendations: analysis.recommendations || [],
-        content: caption || null,
-        fileUrl: blob.url,
-        fileName: `telegram-${timestamp}.jpg`,
-        fileType: 'image/jpeg',
-        tags: analysis.tags || [],
-        keyValues: analysis.keyValues || null,
-      },
-    })
-
-    // 5. Формируем ответ
-    await sendSuccessMessage(chatId, analysis, document.id)
+    await checkDuplicatesAndSave(chatId, analysis, blob.url, 1, caption)
   } catch (error) {
     console.error('Photo processing error:', error)
-    const errorMessage =
-      error instanceof Error ? error.message : 'Неизвестная ошибка'
-    await sendMessage(
-      chatId,
-      `❌ Ошибка при обработке фото:\n${errorMessage}\n\n` +
-        `Попробуйте отправить в лучшем качестве или как файл (не сжатое фото).`
-    )
+    const msg = error instanceof Error ? error.message : 'Неизвестная ошибка'
+    await sendMessage(chatId, `❌ Ошибка: ${msg}`)
   }
 }
 
 /**
- * Обработка документа (PDF) из Telegram.
+ * Обработка PDF документа.
  */
 async function processDocument(
   chatId: number,
@@ -381,107 +336,312 @@ async function processDocument(
   const mimeType = doc.mime_type || 'application/octet-stream'
   const fileName = doc.file_name || 'document'
 
-  // Проверяем тип файла
-  const allowedTypes = [
-    'application/pdf',
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/heic',
-  ]
-
-  const isAllowed = allowedTypes.some((t) => {
-    const typePart = t.split('/')[1]
-    return mimeType.includes(typePart)
-  })
+  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+  const isAllowed = allowedTypes.some((t) => mimeType.includes(t.split('/')[1]))
 
   if (!isAllowed) {
-    await sendMessage(
-      chatId,
-      `❌ Неподдерживаемый тип файла: ${mimeType}\n\nПоддерживаются: PDF, JPG, PNG, WebP`
-    )
+    await sendMessage(chatId, `❌ Неподдерживаемый тип: ${mimeType}`)
     return
   }
 
-  await sendMessage(chatId, `📥 Получил "${fileName}", начинаю обработку...`)
+  await sendMessage(chatId, `📥 Получил "${fileName}", обрабатываю...`)
 
   try {
-    // 1. Скачиваем файл
     const fileInfo = await getFile(doc.file_id)
-    if (!fileInfo.file_path) {
-      throw new Error('File path not available')
-    }
+    if (!fileInfo.file_path) throw new Error('File path not available')
 
     const fileBuffer = await downloadFile(fileInfo.file_path)
-
-    // 2. Загружаем в Vercel Blob
     const timestamp = Date.now()
-    const extension = fileName.split('.').pop() || 'pdf'
-    const blobName = `documents/tg-${timestamp}.${extension}`
+    const ext = fileName.split('.').pop() || 'pdf'
+    const blobName = `documents/tg-${timestamp}.${ext}`
 
     const blob = await put(blobName, fileBuffer, {
       access: 'public',
       contentType: mimeType,
     })
 
-    await sendMessage(chatId, '🤖 Анализирую документ с помощью AI...')
+    await sendMessage(chatId, '🤖 AI анализирует...')
 
-    // 3. AI-анализ
     const analysis = await analyzeDocument(blob.url, mimeType)
 
-    // Нормализуем тип документа
-    const normalizedType = normalizeDocumentType(analysis.type || '')
-
-    // 4. Сохраняем в базу
-    const document = await prisma.document.create({
-      data: {
-        date: analysis.date ? new Date(analysis.date) : new Date(),
-        type: normalizedType,
-        title: analysis.title || fileName,
-        doctor: analysis.doctor,
-        specialty: analysis.specialty,
-        clinic: analysis.clinic,
-        summary: analysis.summary,
-        conclusion: analysis.conclusion,
-        recommendations: analysis.recommendations || [],
-        content: caption || null,
-        fileUrl: blob.url,
-        fileName: fileName,
-        fileType: mimeType,
-        tags: analysis.tags || [],
-        keyValues: analysis.keyValues || null,
-      },
-    })
-
-    // 5. Формируем ответ
-    await sendSuccessMessage(chatId, analysis, document.id)
+    await checkDuplicatesAndSave(chatId, analysis, blob.url, 1, caption, fileName, mimeType)
   } catch (error) {
     console.error('Document processing error:', error)
-    const errorMessage =
-      error instanceof Error ? error.message : 'Неизвестная ошибка'
-    await sendMessage(chatId, `❌ Ошибка при обработке документа:\n${errorMessage}`)
+    const msg = error instanceof Error ? error.message : 'Неизвестная ошибка'
+    await sendMessage(chatId, `❌ Ошибка: ${msg}`)
   }
 }
 
 /**
- * Отправить сообщение об успешном добавлении документа.
+ * Проверить дубликаты и сохранить документ.
+ */
+async function checkDuplicatesAndSave(
+  chatId: number,
+  analysis: AnalysisResult,
+  fileUrl: string,
+  pageCount: number,
+  caption?: string,
+  fileName?: string,
+  fileType?: string
+): Promise<void> {
+  const normalizedType = normalizeDocumentType(analysis.type || '')
+  const docDate = analysis.date ? new Date(analysis.date) : new Date()
+
+  // Ищем похожие документы (та же дата ±3 дня и похожий тип)
+  const startDate = new Date(docDate)
+  startDate.setDate(startDate.getDate() - 3)
+  const endDate = new Date(docDate)
+  endDate.setDate(endDate.getDate() + 3)
+
+  const similar = await prisma.document.findMany({
+    where: {
+      date: {
+        gte: startDate,
+        lte: endDate,
+      },
+      type: normalizedType,
+    },
+    orderBy: { date: 'desc' },
+    take: 5,
+  })
+
+  // Проверяем схожесть названий
+  const duplicate = similar.find((doc) => {
+    const titleWords = (analysis.title || '').toLowerCase().split(/\s+/)
+    const docWords = doc.title.toLowerCase().split(/\s+/)
+    const commonWords = titleWords.filter((w) => w.length > 3 && docWords.includes(w))
+    return commonWords.length >= 2 // Минимум 2 общих слова длиннее 3 символов
+  })
+
+  // Подготавливаем данные документа
+  const documentData = {
+    date: docDate.toISOString(),
+    type: normalizedType,
+    title: analysis.title || 'Документ из Telegram',
+    doctor: analysis.doctor,
+    specialty: analysis.specialty,
+    clinic: analysis.clinic,
+    summary: analysis.summary,
+    conclusion: analysis.conclusion,
+    recommendations: analysis.recommendations || [],
+    content: caption || (pageCount > 1 ? `Документ из ${pageCount} страниц` : null),
+    fileUrl,
+    fileName: fileName || `telegram-${Date.now()}.jpg`,
+    fileType: fileType || 'image/jpeg',
+    tags: analysis.tags || [],
+    keyValues: analysis.keyValues || null,
+  }
+
+  if (duplicate) {
+    // Найден похожий документ — спрашиваем пользователя
+    const expiresAt = new Date()
+    expiresAt.setHours(expiresAt.getHours() + 1)
+
+    const pending = await prisma.pendingDocument.create({
+      data: {
+        chatId: BigInt(chatId),
+        documentData,
+        duplicateId: duplicate.id,
+        expiresAt,
+      },
+    })
+
+    const dupDate = new Date(duplicate.date).toLocaleDateString('ru-RU')
+
+    const { message_id } = await sendMessage(
+      chatId,
+      `⚠️ Найден похожий документ!\n\n` +
+        `📋 Новый: ${analysis.title}\n` +
+        `📅 ${analysis.date}\n\n` +
+        `📋 Существующий: ${duplicate.title}\n` +
+        `📅 ${dupDate}\n\n` +
+        `Что делать?`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '➕ Добавить как новый', callback_data: `add:${pending.id}` },
+            ],
+            [
+              { text: '🔄 Заменить существующий', callback_data: `replace:${pending.id}` },
+            ],
+            [
+              { text: '❌ Отмена', callback_data: `cancel:${pending.id}` },
+            ],
+          ],
+        },
+      }
+    )
+
+    // Сохраняем message_id для последующего редактирования
+    await prisma.pendingDocument.update({
+      where: { id: pending.id },
+      data: { messageId: message_id },
+    })
+  } else {
+    // Дубликатов нет — сохраняем сразу
+    const document = await prisma.document.create({
+      data: {
+        date: docDate,
+        type: documentData.type,
+        title: documentData.title,
+        doctor: documentData.doctor,
+        specialty: documentData.specialty,
+        clinic: documentData.clinic,
+        summary: documentData.summary,
+        conclusion: documentData.conclusion,
+        recommendations: documentData.recommendations,
+        content: documentData.content,
+        fileUrl: documentData.fileUrl,
+        fileName: documentData.fileName,
+        fileType: documentData.fileType,
+        tags: documentData.tags,
+        keyValues: documentData.keyValues,
+      },
+    })
+
+    await sendSuccessMessage(chatId, analysis, document.id, pageCount)
+  }
+}
+
+/**
+ * Обработка нажатия на inline кнопку.
+ */
+async function handleCallbackQuery(
+  callback: {
+    id: string
+    from: { id: number }
+    message?: { message_id: number; chat: { id: number } }
+    data?: string
+  }
+): Promise<void> {
+  await answerCallbackQuery(callback.id)
+
+  if (!callback.data || !callback.message) return
+
+  const [action, pendingId] = callback.data.split(':')
+  const chatId = callback.message.chat.id
+  const messageId = callback.message.message_id
+
+  const pending = await prisma.pendingDocument.findUnique({
+    where: { id: pendingId },
+  })
+
+  if (!pending) {
+    await editMessage(chatId, messageId, '⏰ Время действия истекло.')
+    return
+  }
+
+  const docData = pending.documentData as {
+    date: string
+    type: string
+    title: string
+    doctor?: string | null
+    specialty?: string | null
+    clinic?: string | null
+    summary?: string | null
+    conclusion?: string | null
+    recommendations?: string[]
+    content?: string | null
+    fileUrl: string
+    fileName: string
+    fileType: string
+    tags?: string[]
+    keyValues?: Record<string, string> | null
+  }
+
+  if (action === 'cancel') {
+    await prisma.pendingDocument.delete({ where: { id: pendingId } })
+    await editMessage(chatId, messageId, '❌ Добавление отменено.')
+    return
+  }
+
+  if (action === 'add') {
+    // Добавить как новый
+    const document = await prisma.document.create({
+      data: {
+        date: new Date(docData.date),
+        type: docData.type,
+        title: docData.title,
+        doctor: docData.doctor,
+        specialty: docData.specialty,
+        clinic: docData.clinic,
+        summary: docData.summary,
+        conclusion: docData.conclusion,
+        recommendations: docData.recommendations || [],
+        content: docData.content,
+        fileUrl: docData.fileUrl,
+        fileName: docData.fileName,
+        fileType: docData.fileType,
+        tags: docData.tags || [],
+        keyValues: docData.keyValues,
+      },
+    })
+
+    await prisma.pendingDocument.delete({ where: { id: pendingId } })
+
+    await editMessage(
+      chatId,
+      messageId,
+      `✅ Документ добавлен!\n\n` +
+        `📋 ${docData.title}\n` +
+        `📅 ${docData.date?.split('T')[0]}\n\n` +
+        `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${document.id}`
+    )
+    return
+  }
+
+  if (action === 'replace') {
+    // Заменить существующий
+    if (!pending.duplicateId) {
+      await editMessage(chatId, messageId, '❌ Ошибка: дубликат не найден.')
+      return
+    }
+
+    await prisma.document.update({
+      where: { id: pending.duplicateId },
+      data: {
+        date: new Date(docData.date),
+        type: docData.type,
+        title: docData.title,
+        doctor: docData.doctor,
+        specialty: docData.specialty,
+        clinic: docData.clinic,
+        summary: docData.summary,
+        conclusion: docData.conclusion,
+        recommendations: docData.recommendations || [],
+        content: docData.content,
+        fileUrl: docData.fileUrl,
+        fileName: docData.fileName,
+        fileType: docData.fileType,
+        tags: docData.tags || [],
+        keyValues: docData.keyValues,
+      },
+    })
+
+    await prisma.pendingDocument.delete({ where: { id: pendingId } })
+
+    await editMessage(
+      chatId,
+      messageId,
+      `🔄 Документ обновлён!\n\n` +
+        `📋 ${docData.title}\n` +
+        `📅 ${docData.date?.split('T')[0]}\n\n` +
+        `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${pending.duplicateId}`
+    )
+  }
+}
+
+/**
+ * Отправить сообщение об успехе.
  */
 async function sendSuccessMessage(
   chatId: number,
-  analysis: {
-    title?: string
-    date?: string | null
-    type?: string
-    doctor?: string | null
-    summary?: string
-    conclusion?: string | null
-    recommendations?: string[]
-    keyValues?: Record<string, string>
-  },
+  analysis: AnalysisResult,
   documentId: string,
   pageCount?: number
 ): Promise<void> {
-  let response = `✅ Документ добавлен в карту!\n\n`
+  let response = `✅ Документ добавлен!\n\n`
   response += `📋 ${analysis.title || 'Документ'}\n`
   response += `📅 ${analysis.date || 'Дата не определена'}\n`
 
@@ -489,52 +649,41 @@ async function sendSuccessMessage(
     response += `📄 Страниц: ${pageCount}\n`
   }
 
-  if (analysis.type) {
-    response += `📁 Тип: ${analysis.type}\n`
-  }
+  if (analysis.type) response += `📁 Тип: ${analysis.type}\n`
+  if (analysis.doctor) response += `👨‍⚕️ Врач: ${analysis.doctor}\n`
 
-  if (analysis.doctor) {
-    response += `👨‍⚕️ Врач: ${analysis.doctor}\n`
-  }
-
-  // Заключение врача (дословное)
   if (analysis.conclusion) {
-    response += `\n📜 Заключение врача:\n${analysis.conclusion}\n`
+    const shortConclusion = analysis.conclusion.length > 200
+      ? analysis.conclusion.substring(0, 200) + '...'
+      : analysis.conclusion
+    response += `\n📜 Заключение:\n${shortConclusion}\n`
   }
 
-  // Рекомендации
   if (analysis.recommendations && analysis.recommendations.length > 0) {
     response += `\n✅ Рекомендации:\n`
-    for (let i = 0; i < analysis.recommendations.length; i++) {
+    for (let i = 0; i < Math.min(analysis.recommendations.length, 5); i++) {
       response += `${i + 1}. ${analysis.recommendations[i]}\n`
     }
-  }
-
-  // AI-резюме
-  if (analysis.summary) {
-    response += `\n🤖 AI-резюме:\n${analysis.summary}\n`
-  }
-
-  // Ключевые показатели
-  if (analysis.keyValues && Object.keys(analysis.keyValues).length > 0) {
-    response += `\n📊 Показатели:\n`
-    for (const [key, value] of Object.entries(analysis.keyValues)) {
-      response += `• ${key}: ${value}\n`
+    if (analysis.recommendations.length > 5) {
+      response += `... и ещё ${analysis.recommendations.length - 5}\n`
     }
   }
 
-  response += `\n🔗 Открыть: ${process.env.NEXT_PUBLIC_APP_URL}/documents/${documentId}`
+  if (analysis.summary) {
+    const shortSummary = analysis.summary.length > 150
+      ? analysis.summary.substring(0, 150) + '...'
+      : analysis.summary
+    response += `\n🤖 AI: ${shortSummary}\n`
+  }
+
+  response += `\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${documentId}`
 
   await sendMessage(chatId, response)
 }
 
-/**
- * Склонение слова в зависимости от числа.
- */
 function pluralize(n: number, one: string, few: string, many: string): string {
   const mod10 = n % 10
   const mod100 = n % 100
-
   if (mod100 >= 11 && mod100 <= 19) return many
   if (mod10 === 1) return one
   if (mod10 >= 2 && mod10 <= 4) return few

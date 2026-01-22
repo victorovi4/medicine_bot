@@ -9,6 +9,7 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
 export interface TelegramUpdate {
   update_id: number
   message?: TelegramMessage
+  callback_query?: TelegramCallbackQuery
 }
 
 export interface TelegramMessage {
@@ -28,7 +29,21 @@ export interface TelegramMessage {
   photo?: TelegramPhotoSize[]
   document?: TelegramDocument
   caption?: string
-  media_group_id?: string // Присутствует когда несколько фото отправлены вместе
+}
+
+export interface TelegramCallbackQuery {
+  id: string
+  from: {
+    id: number
+    first_name: string
+  }
+  message?: {
+    message_id: number
+    chat: {
+      id: number
+    }
+  }
+  data?: string
 }
 
 export interface TelegramPhotoSize {
@@ -54,12 +69,13 @@ export interface TelegramFile {
   file_path?: string
 }
 
+export interface InlineKeyboardButton {
+  text: string
+  callback_data: string
+}
+
 /**
  * Отправить текстовое сообщение в чат.
- * Args:
- *   chatId (number): ID чата.
- *   text (string): Текст сообщения.
- *   options (object): Дополнительные опции (parse_mode, reply_to_message_id).
  */
 export async function sendMessage(
   chatId: number,
@@ -68,8 +84,11 @@ export async function sendMessage(
     parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2'
     reply_to_message_id?: number
     disable_notification?: boolean
+    reply_markup?: {
+      inline_keyboard: InlineKeyboardButton[][]
+    }
   }
-): Promise<void> {
+): Promise<{ message_id: number }> {
   const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -85,14 +104,61 @@ export async function sendMessage(
     console.error('Telegram sendMessage error:', error)
     throw new Error(`Failed to send message: ${error.description}`)
   }
+
+  const data = await response.json()
+  return { message_id: data.result.message_id }
+}
+
+/**
+ * Редактировать существующее сообщение.
+ */
+export async function editMessage(
+  chatId: number,
+  messageId: number,
+  text: string,
+  options?: {
+    parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2'
+    reply_markup?: {
+      inline_keyboard: InlineKeyboardButton[][]
+    }
+  }
+): Promise<void> {
+  const response = await fetch(`${TELEGRAM_API}/editMessageText`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      message_id: messageId,
+      text,
+      ...options,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    console.error('Telegram editMessage error:', error)
+  }
+}
+
+/**
+ * Ответить на callback_query (убрать "часики" у кнопки).
+ */
+export async function answerCallbackQuery(
+  callbackQueryId: string,
+  text?: string
+): Promise<void> {
+  await fetch(`${TELEGRAM_API}/answerCallbackQuery`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      callback_query_id: callbackQueryId,
+      text,
+    }),
+  })
 }
 
 /**
  * Получить информацию о файле по file_id.
- * Args:
- *   fileId (string): ID файла из Telegram.
- * Returns:
- *   TelegramFile: Информация о файле включая file_path.
  */
 export async function getFile(fileId: string): Promise<TelegramFile> {
   const response = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`)
@@ -107,10 +173,6 @@ export async function getFile(fileId: string): Promise<TelegramFile> {
 
 /**
  * Скачать файл из Telegram.
- * Args:
- *   filePath (string): Путь к файлу (из getFile).
- * Returns:
- *   Buffer: Содержимое файла.
  */
 export async function downloadFile(filePath: string): Promise<Buffer> {
   const url = `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`
@@ -126,8 +188,6 @@ export async function downloadFile(filePath: string): Promise<Buffer> {
 
 /**
  * Установить webhook для бота.
- * Args:
- *   url (string): URL webhook endpoint.
  */
 export async function setWebhook(url: string): Promise<void> {
   const response = await fetch(`${TELEGRAM_API}/setWebhook`, {
@@ -135,7 +195,7 @@ export async function setWebhook(url: string): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       url,
-      allowed_updates: ['message'],
+      allowed_updates: ['message', 'callback_query'],
     }),
   })
 
@@ -154,10 +214,6 @@ export async function deleteWebhook(): Promise<void> {
 
 /**
  * Проверить, разрешён ли пользователь.
- * Args:
- *   userId (number): Telegram ID пользователя.
- * Returns:
- *   boolean: true если пользователь разрешён.
  */
 export function isUserAllowed(userId: number): boolean {
   const allowedUsers = process.env.TELEGRAM_ALLOWED_USERS

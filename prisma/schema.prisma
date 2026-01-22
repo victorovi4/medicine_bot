@@ -41,16 +41,34 @@ model Document {
   
   @@index([date])
   @@index([type])
+  @@index([title])
 }
 
-// Временное хранилище для группировки фото из Telegram media groups
-model MediaGroupPending {
-  id           String   @id @default(uuid())
-  mediaGroupId String   // Telegram media_group_id
-  chatId       BigInt   // Chat ID для ответа
-  fileId       String   // Telegram file_id
-  fileType     String   // MIME тип: image/jpeg, image/png
-  receivedAt   DateTime @default(now())
+// Временное хранилище для режима /batch — сбор страниц документа
+model BatchPending {
+  id         String   @id @default(uuid())
+  chatId     BigInt   // Telegram Chat ID
+  fileUrl    String   // URL загруженного файла в Vercel Blob
+  fileType   String   // MIME тип
+  receivedAt DateTime @default(now())
   
-  @@index([mediaGroupId])
+  @@index([chatId])
+}
+
+// Ожидающий подтверждения документ (для проверки дубликатов)
+model PendingDocument {
+  id              String   @id @default(uuid())
+  chatId          BigInt   // Telegram Chat ID
+  messageId       Int?     // ID сообщения с кнопками (для редактирования)
+  
+  // Данные документа (JSON)
+  documentData    Json     // Все поля документа
+  
+  // Найденный дубликат
+  duplicateId     String?  // ID существующего документа-дубликата
+  
+  createdAt       DateTime @default(now())
+  expiresAt       DateTime // Автоудаление через 1 час
+  
+  @@index([chatId])
 }
