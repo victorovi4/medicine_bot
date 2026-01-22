@@ -8,16 +8,33 @@ import { setWebhook, deleteWebhook } from '@/lib/telegram'
  * DELETE — удалить webhook.
  */
 
-// GET — показать текущий статус
-export async function GET() {
+// GET — показать текущий статус или установить с ?set=true
+export async function GET(request: NextRequest) {
   const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/telegram/webhook`
+  const { searchParams } = new URL(request.url)
+  
+  // Если ?set=true — устанавливаем webhook
+  if (searchParams.get('set') === 'true') {
+    try {
+      await setWebhook(webhookUrl)
+      return NextResponse.json({
+        success: true,
+        message: '✅ Webhook установлен!',
+        webhookUrl,
+        allowedUpdates: ['message', 'callback_query'],
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Setup failed'
+      return NextResponse.json({ error: message }, { status: 500 })
+    }
+  }
 
   return NextResponse.json({
     message: 'Telegram webhook setup',
     webhookUrl,
     instructions: {
-      set: 'POST to this endpoint to set webhook',
-      delete: 'DELETE to this endpoint to remove webhook',
+      set: 'GET /api/telegram/setup?set=true — установить webhook',
+      delete: 'DELETE /api/telegram/setup — удалить webhook',
     },
   })
 }
