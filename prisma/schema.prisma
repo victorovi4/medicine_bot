@@ -42,3 +42,15 @@ model Document {
   @@index([date])
   @@index([type])
 }
+
+// Временное хранилище для группировки фото из Telegram media groups
+model MediaGroupPending {
+  id           String   @id @default(uuid())
+  mediaGroupId String   // Telegram media_group_id
+  chatId       BigInt   // Chat ID для ответа
+  fileId       String   // Telegram file_id
+  fileType     String   // MIME тип: image/jpeg, image/png
+  receivedAt   DateTime @default(now())
+  
+  @@index([mediaGroupId])
+}

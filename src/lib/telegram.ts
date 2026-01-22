@@ -28,6 +28,7 @@ export interface TelegramMessage {
   photo?: TelegramPhotoSize[]
   document?: TelegramDocument
   caption?: string
+  media_group_id?: string // Присутствует когда несколько фото отправлены вместе
 }
 
 export interface TelegramPhotoSize {

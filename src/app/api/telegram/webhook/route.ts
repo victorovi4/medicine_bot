@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/db'
-import { analyzeDocument } from '@/lib/claude'
+import { analyzeDocument, analyzeMultipleImages } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import {
   TelegramUpdate,
@@ -14,6 +14,9 @@ import {
 // Используем Node.js runtime для работы с файлами
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// Время ожидания для сбора фото из media group (в мс)
+const MEDIA_GROUP_WAIT_TIME = 4000
 
 /**
  * Webhook endpoint для Telegram бота.
@@ -54,6 +57,7 @@ export async function POST(request: NextRequest) {
           `1. Проанализирую его с помощью AI\n` +
           `2. Извлеку ключевую информацию\n` +
           `3. Добавлю в медицинскую карту\n\n` +
+          `📎 Многостраничный документ: выберите несколько фото в галерее и отправьте разом — я объединю их в один документ.\n\n` +
           `🔗 Посмотреть карту: ${process.env.NEXT_PUBLIC_APP_URL}\n\n` +
           `Команды:\n` +
           `/start — это сообщение\n` +
@@ -110,6 +114,8 @@ export async function POST(request: NextRequest) {
         chatId,
         `📖 Справка по боту\n\n` +
           `Отправьте мне фото или PDF документа, и я добавлю его в медицинскую карту.\n\n` +
+          `📎 Многостраничный документ:\n` +
+          `Выберите несколько фото в галерее и отправьте их разом — они будут объединены в один документ.\n\n` +
           `Команды:\n` +
           `/start — приветствие\n` +
           `/status — статистика\n` +
@@ -122,7 +128,18 @@ export async function POST(request: NextRequest) {
 
     // Обработка фото
     if (message.photo && message.photo.length > 0) {
-      await processPhoto(chatId, message.photo, message.caption)
+      // Проверяем, является ли это частью media group
+      if (message.media_group_id) {
+        await handleMediaGroupPhoto(
+          chatId,
+          message.media_group_id,
+          message.photo,
+          message.caption
+        )
+      } else {
+        // Одиночное фото — обрабатываем сразу
+        await processPhoto(chatId, message.photo, message.caption)
+      }
       return NextResponse.json({ ok: true })
     }
 
@@ -150,11 +167,137 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Обработка фото из Telegram.
- * Args:
- *   chatId (number): ID чата для ответа.
- *   photos (array): Массив фото разных размеров.
- *   caption (string): Подпись к фото.
+ * Обработка фото из media group.
+ * Сохраняет фото в pending таблицу, первый запрос ждёт и обрабатывает всю группу.
+ */
+async function handleMediaGroupPhoto(
+  chatId: number,
+  mediaGroupId: string,
+  photos: { file_id: string; width: number; height: number }[],
+  caption?: string
+): Promise<void> {
+  // Берём фото максимального размера
+  const photo = photos[photos.length - 1]
+
+  // Сохраняем в pending таблицу
+  await prisma.mediaGroupPending.create({
+    data: {
+      mediaGroupId,
+      chatId: BigInt(chatId),
+      fileId: photo.file_id,
+      fileType: 'image/jpeg',
+    },
+  })
+
+  // Проверяем, сколько уже есть фото в этой группе
+  const existingCount = await prisma.mediaGroupPending.count({
+    where: { mediaGroupId },
+  })
+
+  // Если это первое фото — мы "лидер", будем ждать и обрабатывать
+  if (existingCount === 1) {
+    await sendMessage(chatId, '📥 Получаю страницы документа...')
+
+    // Ждём, пока придут остальные фото группы
+    await new Promise((resolve) => setTimeout(resolve, MEDIA_GROUP_WAIT_TIME))
+
+    // Забираем все фото из группы
+    const pendingPhotos = await prisma.mediaGroupPending.findMany({
+      where: { mediaGroupId },
+      orderBy: { receivedAt: 'asc' },
+    })
+
+    if (pendingPhotos.length === 0) {
+      // Кто-то уже обработал (race condition) — выходим
+      return
+    }
+
+    // Удаляем из pending сразу, чтобы другие запросы не пытались обработать
+    await prisma.mediaGroupPending.deleteMany({
+      where: { mediaGroupId },
+    })
+
+    const photoCount = pendingPhotos.length
+    await sendMessage(
+      chatId,
+      `📄 Получено ${photoCount} ${pluralize(photoCount, 'страница', 'страницы', 'страниц')}. Обрабатываю...`
+    )
+
+    try {
+      // Скачиваем и загружаем все фото
+      const uploadedImages: { url: string; mediaType: string }[] = []
+      const timestamp = Date.now()
+
+      for (let i = 0; i < pendingPhotos.length; i++) {
+        const pending = pendingPhotos[i]
+        const fileInfo = await getFile(pending.fileId)
+        if (!fileInfo.file_path) continue
+
+        const fileBuffer = await downloadFile(fileInfo.file_path)
+        const blobName = `documents/tg-${timestamp}-page${i + 1}.jpg`
+
+        const blob = await put(blobName, fileBuffer, {
+          access: 'public',
+          contentType: 'image/jpeg',
+        })
+
+        uploadedImages.push({
+          url: blob.url,
+          mediaType: 'image/jpeg',
+        })
+      }
+
+      if (uploadedImages.length === 0) {
+        throw new Error('Не удалось загрузить ни одно фото')
+      }
+
+      await sendMessage(chatId, '🤖 Анализирую документ с помощью AI...')
+
+      // AI-анализ всех страниц как одного документа
+      const analysis = await analyzeMultipleImages(uploadedImages)
+
+      // Нормализуем тип документа
+      const normalizedType = normalizeDocumentType(analysis.type || '')
+
+      // Сохраняем в базу (используем URL первой страницы как основной файл)
+      const document = await prisma.document.create({
+        data: {
+          date: analysis.date ? new Date(analysis.date) : new Date(),
+          type: normalizedType,
+          title: analysis.title || 'Многостраничный документ из Telegram',
+          doctor: analysis.doctor,
+          specialty: analysis.specialty,
+          clinic: analysis.clinic,
+          summary: analysis.summary,
+          conclusion: analysis.conclusion,
+          recommendations: analysis.recommendations || [],
+          content: caption || `Документ из ${photoCount} страниц`,
+          fileUrl: uploadedImages[0].url,
+          fileName: `telegram-${timestamp}-multipage.jpg`,
+          fileType: 'image/jpeg',
+          tags: analysis.tags || [],
+          keyValues: analysis.keyValues || null,
+        },
+      })
+
+      // Формируем ответ
+      await sendSuccessMessage(chatId, analysis, document.id, photoCount)
+    } catch (error) {
+      console.error('Media group processing error:', error)
+      const errorMessage =
+        error instanceof Error ? error.message : 'Неизвестная ошибка'
+      await sendMessage(
+        chatId,
+        `❌ Ошибка при обработке документа:\n${errorMessage}\n\n` +
+          `Попробуйте отправить страницы по одной или объединить в PDF.`
+      )
+    }
+  }
+  // Если это не первое фото — просто выходим, лидер обработает всё
+}
+
+/**
+ * Обработка одиночного фото из Telegram.
  */
 async function processPhoto(
   chatId: number,
@@ -229,10 +372,6 @@ async function processPhoto(
 
 /**
  * Обработка документа (PDF) из Telegram.
- * Args:
- *   chatId (number): ID чата для ответа.
- *   doc (object): Информация о документе.
- *   caption (string): Подпись к документу.
  */
 async function processDocument(
   chatId: number,
@@ -339,11 +478,16 @@ async function sendSuccessMessage(
     recommendations?: string[]
     keyValues?: Record<string, string>
   },
-  documentId: string
+  documentId: string,
+  pageCount?: number
 ): Promise<void> {
   let response = `✅ Документ добавлен в карту!\n\n`
   response += `📋 ${analysis.title || 'Документ'}\n`
   response += `📅 ${analysis.date || 'Дата не определена'}\n`
+
+  if (pageCount && pageCount > 1) {
+    response += `📄 Страниц: ${pageCount}\n`
+  }
 
   if (analysis.type) {
     response += `📁 Тип: ${analysis.type}\n`
@@ -382,4 +526,17 @@ async function sendSuccessMessage(
   response += `\n🔗 Открыть: ${process.env.NEXT_PUBLIC_APP_URL}/documents/${documentId}`
 
   await sendMessage(chatId, response)
+}
+
+/**
+ * Склонение слова в зависимости от числа.
+ */
+function pluralize(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+
+  if (mod100 >= 11 && mod100 <= 19) return many
+  if (mod10 === 1) return one
+  if (mod10 >= 2 && mod10 <= 4) return few
+  return many
 }

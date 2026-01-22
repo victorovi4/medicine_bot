@@ -117,6 +117,72 @@ export async function analyzeDocument(
 }
 
 /**
+ * Анализирует несколько изображений как один многостраничный документ.
+ * Args:
+ *   images (array): Массив объектов { url, mediaType }.
+ * Returns:
+ *   AnalysisResult: Результат AI-анализа.
+ */
+export async function analyzeMultipleImages(
+  images: { url: string; mediaType: string }[]
+): Promise<AnalysisResult> {
+  if (images.length === 0) {
+    throw new Error('No images to analyze')
+  }
+
+  if (images.length === 1) {
+    return analyzeImage(images[0].url, images[0].mediaType)
+  }
+
+  // Конвертируем все изображения в base64
+  const imageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+
+  for (let i = 0; i < images.length; i++) {
+    const { url, mediaType } = images[i]
+    const response = await fetch(url)
+    const arrayBuffer = await response.arrayBuffer()
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    const dataUrl = `data:${mediaType};base64,${base64}`
+
+    imageContents.push({
+      type: 'image_url',
+      image_url: {
+        url: dataUrl,
+      },
+    })
+  }
+
+  // Добавляем промпт с пояснением что это многостраничный документ
+  const multiPagePrompt = `Это многостраничный медицинский документ, состоящий из ${images.length} страниц/фото.
+Проанализируй ВСЕ страницы как ОДИН документ и извлеки информацию.
+
+${ANALYSIS_PROMPT}`
+
+  imageContents.push({
+    type: 'text',
+    text: multiPagePrompt,
+  })
+
+  const completion = await getOpenRouter().chat.completions.create({
+    model: MODEL,
+    max_tokens: 4000,
+    messages: [
+      {
+        role: 'user',
+        content: imageContents,
+      },
+    ],
+  })
+
+  const textContent = completion.choices[0]?.message?.content
+  if (!textContent) {
+    throw new Error('No response from OpenRouter')
+  }
+
+  return parseAnalysisJson(textContent)
+}
+
+/**
  * Анализирует изображение через OpenRouter (Claude Vision).
  * Args:
  *   imageUrl (string): URL изображения.
