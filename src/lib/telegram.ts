@@ -74,6 +74,20 @@ export interface InlineKeyboardButton {
   callback_data: string
 }
 
+export interface ReplyKeyboardButton {
+  text: string
+}
+
+export interface ReplyKeyboardMarkup {
+  keyboard: ReplyKeyboardButton[][]
+  resize_keyboard?: boolean
+  one_time_keyboard?: boolean
+}
+
+export interface InlineKeyboardMarkup {
+  inline_keyboard: InlineKeyboardButton[][]
+}
+
 /**
  * Отправить текстовое сообщение в чат.
  */
@@ -84,9 +98,7 @@ export async function sendMessage(
     parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2'
     reply_to_message_id?: number
     disable_notification?: boolean
-    reply_markup?: {
-      inline_keyboard: InlineKeyboardButton[][]
-    }
+    reply_markup?: InlineKeyboardMarkup | ReplyKeyboardMarkup
   }
 ): Promise<{ message_id: number }> {
   const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
@@ -118,9 +130,7 @@ export async function editMessage(
   text: string,
   options?: {
     parse_mode?: 'HTML' | 'Markdown' | 'MarkdownV2'
-    reply_markup?: {
-      inline_keyboard: InlineKeyboardButton[][]
-    }
+    reply_markup?: InlineKeyboardMarkup
   }
 ): Promise<void> {
   const response = await fetch(`${TELEGRAM_API}/editMessageText`, {

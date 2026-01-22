@@ -57,12 +57,18 @@ export async function POST(request: NextRequest) {
         chatId,
         `👋 Привет, ${userName}!\n\n` +
           `Я помогаю добавлять документы в медицинскую карту.\n\n` +
-          `📄 Отправьте фото или PDF документа.\n\n` +
-          `📎 Многостраничный документ:\n` +
-          `/batch — начать сбор страниц\n` +
-          `[отправляете фото 1, 2, 3...]\n` +
-          `/done — закончить и обработать\n\n` +
-          `🔗 Карта: ${process.env.NEXT_PUBLIC_APP_URL}`
+          `📄 Просто отправьте фото или PDF документа.\n\n` +
+          `📎 Если документ на нескольких фото — нажмите кнопку "📎 Много фото" внизу.\n\n` +
+          `🔗 Карта: ${process.env.NEXT_PUBLIC_APP_URL}`,
+        {
+          reply_markup: {
+            keyboard: [
+              [{ text: '📎 Много фото' }],
+              [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+            ],
+            resize_keyboard: true,
+          },
+        }
       )
       return NextResponse.json({ ok: true })
     }
@@ -71,18 +77,17 @@ export async function POST(request: NextRequest) {
       await sendMessage(
         chatId,
         `📖 Справка\n\n` +
-          `Отправьте фото или PDF документа.\n\n` +
-          `📎 Многостраничный документ:\n` +
-          `/batch — начать сбор страниц\n` +
-          `/done — обработать собранные страницы\n` +
-          `/cancel — отменить сбор\n\n` +
-          `/status — статистика\n` +
-          `/last — последние 5 документов`
+          `📄 Отправьте фото или PDF — добавится в карту.\n\n` +
+          `📎 Много фото (многостраничный документ):\n` +
+          `1. Нажмите "📎 Много фото"\n` +
+          `2. Отправляйте фото по одному\n` +
+          `3. Нажмите "✅ Готово"\n\n` +
+          `Команды: /status, /last, /cancel`
       )
       return NextResponse.json({ ok: true })
     }
 
-    if (message.text === '/status') {
+    if (message.text === '/status' || message.text === '📊 Статистика') {
       const count = await prisma.document.count()
       const lastDoc = await prisma.document.findFirst({
         orderBy: { createdAt: 'desc' },
@@ -99,7 +104,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    if (message.text === '/last') {
+    if (message.text === '/last' || message.text === '📋 Последние') {
       const docs = await prisma.document.findMany({
         take: 5,
         orderBy: { date: 'desc' },
@@ -118,7 +123,7 @@ export async function POST(request: NextRequest) {
 
     // === РЕЖИМ BATCH ===
 
-    if (message.text === '/batch') {
+    if (message.text === '/batch' || message.text === '📎 Много фото') {
       // Проверяем, нет ли уже активного batch
       const existing = await prisma.batchPending.findFirst({
         where: { chatId: BigInt(chatId) },
@@ -131,9 +136,16 @@ export async function POST(request: NextRequest) {
         await sendMessage(
           chatId,
           `⚠️ Уже идёт сбор страниц (${count} шт.)\n\n` +
-            `Отправьте ещё фото или:\n` +
-            `/done — обработать\n` +
-            `/cancel — отменить`
+            `Отправьте ещё фото или нажмите кнопку ниже.`,
+          {
+            reply_markup: {
+              keyboard: [
+                [{ text: '✅ Готово' }, { text: '❌ Отмена' }],
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          }
         )
       } else {
         // Создаём маркер активного batch
@@ -148,13 +160,22 @@ export async function POST(request: NextRequest) {
           chatId,
           `📎 Режим сбора страниц включён!\n\n` +
             `Отправляйте фото страниц документа по одному.\n` +
-            `Когда закончите — нажмите /done`
+            `Когда закончите — нажмите "✅ Готово"`,
+          {
+            reply_markup: {
+              keyboard: [
+                [{ text: '✅ Готово' }, { text: '❌ Отмена' }],
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          }
         )
       }
       return NextResponse.json({ ok: true })
     }
 
-    if (message.text === '/cancel') {
+    if (message.text === '/cancel' || message.text === '❌ Отмена') {
       // Считаем страницы (без маркера)
       const pageCount = await prisma.batchPending.count({
         where: { chatId: BigInt(chatId), fileUrl: { not: '__batch_marker__' } },
@@ -165,14 +186,26 @@ export async function POST(request: NextRequest) {
       })
 
       if (deleted.count > 0) {
-        await sendMessage(chatId, `❌ Сбор отменён.${pageCount > 0 ? ` Удалено ${pageCount} страниц.` : ''}`)
+        await sendMessage(
+          chatId,
+          `❌ Сбор отменён.${pageCount > 0 ? ` Удалено ${pageCount} страниц.` : ''}`,
+          {
+            reply_markup: {
+              keyboard: [
+                [{ text: '📎 Много фото' }],
+                [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+              ],
+              resize_keyboard: true,
+            },
+          }
+        )
       } else {
         await sendMessage(chatId, `ℹ️ Нет активного сбора страниц.`)
       }
       return NextResponse.json({ ok: true })
     }
 
-    if (message.text === '/done') {
+    if (message.text === '/done' || message.text === '✅ Готово') {
       await processBatch(chatId)
       return NextResponse.json({ ok: true })
     }
@@ -520,6 +553,7 @@ async function checkDuplicatesAndSave(
     })
 
     const dupDate = new Date(duplicate.date).toLocaleDateString('ru-RU')
+    const dupUrl = `${process.env.NEXT_PUBLIC_APP_URL}/documents/${duplicate.id}`
 
     const { message_id } = await sendMessage(
       chatId,
@@ -527,7 +561,8 @@ async function checkDuplicatesAndSave(
         `📋 Новый: ${analysis.title}\n` +
         `📅 ${analysis.date}\n\n` +
         `📋 Существующий: ${duplicate.title}\n` +
-        `📅 ${dupDate}\n\n` +
+        `📅 ${dupDate}\n` +
+        `🔗 ${dupUrl}\n\n` +
         `Что делать?`,
       {
         reply_markup: {
@@ -637,6 +672,16 @@ async function handleCallbackQuery(
   if (action === 'cancel') {
     await prisma.pendingDocument.delete({ where: { id: pendingId } })
     await editMessage(chatId, messageId, '❌ Добавление отменено.')
+    // Отправляем сообщение с клавиатурой
+    await sendMessage(chatId, '📂 Готов к новым документам!', {
+      reply_markup: {
+        keyboard: [
+          [{ text: '📎 Много фото' }],
+          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+        ],
+        resize_keyboard: true,
+      },
+    })
     return
   }
 
@@ -672,6 +717,16 @@ async function handleCallbackQuery(
         `📅 ${docData.date?.split('T')[0]}\n\n` +
         `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${document.id}`
     )
+    // Отправляем сообщение с клавиатурой
+    await sendMessage(chatId, '📂 Готов к новым документам!', {
+      reply_markup: {
+        keyboard: [
+          [{ text: '📎 Много фото' }],
+          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+        ],
+        resize_keyboard: true,
+      },
+    })
     return
   }
 
@@ -713,6 +768,16 @@ async function handleCallbackQuery(
         `📅 ${docData.date?.split('T')[0]}\n\n` +
         `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${pending.duplicateId}`
     )
+    // Отправляем сообщение с клавиатурой
+    await sendMessage(chatId, '📂 Готов к новым документам!', {
+      reply_markup: {
+        keyboard: [
+          [{ text: '📎 Много фото' }],
+          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+        ],
+        resize_keyboard: true,
+      },
+    })
   }
   } catch (error) {
     console.error('Callback query error:', error)
@@ -770,7 +835,15 @@ async function sendSuccessMessage(
 
   response += `\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${documentId}`
 
-  await sendMessage(chatId, response)
+  await sendMessage(chatId, response, {
+    reply_markup: {
+      keyboard: [
+        [{ text: '📎 Много фото' }],
+        [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+      ],
+      resize_keyboard: true,
+    },
+  })
 }
 
 function pluralize(n: number, one: string, few: string, many: string): string {
