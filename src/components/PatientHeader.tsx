@@ -32,16 +32,18 @@ export function PatientHeader() {
             )}
             
             {/* Сопутствующие заболевания */}
-            {hasComorbidities && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm text-gray-600">Сопутствующие:</span>
-                {PATIENT.comorbidities.map((disease) => (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-600">Сопутствующие:</span>
+              {hasComorbidities ? (
+                PATIENT.comorbidities.map((disease) => (
                   <Badge key={disease} variant="secondary" className="text-xs">
                     {disease}
                   </Badge>
-                ))}
-              </div>
-            )}
+                ))
+              ) : (
+                <span className="text-sm text-gray-400 italic">Не указаны</span>
+              )}
+            </div>
           </div>
           
           {/* Правая колонка */}

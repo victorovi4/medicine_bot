@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeServerComponent } from '@/lib/test-mode'
 import { PatientHeader } from '@/components/PatientHeader'
-import { Timeline } from '@/components/Timeline'
+import { CategoryFilter } from '@/components/CategoryFilter'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 
@@ -13,6 +13,16 @@ export default async function HomePage() {
   const prisma = getPrismaClient({ testMode })
   const documents = await prisma.document.findMany({
     orderBy: { date: 'desc' },
+    select: {
+      id: true,
+      date: true,
+      category: true,
+      subtype: true,
+      title: true,
+      doctor: true,
+      specialty: true,
+      summary: true,
+    },
   })
   
   return (
@@ -29,7 +39,7 @@ export default async function HomePage() {
         </Link>
       </div>
       
-      <Timeline documents={documents} />
+      <CategoryFilter documents={documents} />
     </main>
   )
 }
