@@ -12,7 +12,6 @@ interface Document {
   subtype: string
   title: string
   doctor: string | null
-  specialty: string | null
   summary: string | null
 }
 
@@ -74,7 +73,6 @@ export function CategoryFilter({ documents }: CategoryFilterProps) {
               subtype={doc.subtype}
               title={doc.title}
               doctor={doc.doctor}
-              specialty={doc.specialty}
               summary={doc.summary}
             />
           ))}

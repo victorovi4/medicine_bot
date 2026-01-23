@@ -20,7 +20,6 @@ export default async function HomePage() {
       subtype: true,
       title: true,
       doctor: true,
-      specialty: true,
       summary: true,
     },
   })
