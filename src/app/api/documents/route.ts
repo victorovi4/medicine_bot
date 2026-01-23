@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
     const document = await prisma.document.create({
       data: {
         date: new Date(body.date),
-        type: body.type,
+        category: body.category,
+        subtype: body.subtype,
         title: body.title,
         doctor: body.doctor || null,
         specialty: body.specialty || null,

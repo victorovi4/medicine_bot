@@ -14,11 +14,18 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { DOCUMENT_TYPES, SPECIALTIES, normalizeDocumentType } from '@/lib/types'
+import { 
+  DOCUMENT_CATEGORIES, 
+  CATEGORY_SUBTYPES, 
+  SPECIALTIES, 
+  normalizeDocumentType,
+  DocumentCategory,
+} from '@/lib/types'
 import { AlertCircle, CheckCircle2, Loader2, Sparkles, Upload } from 'lucide-react'
 
 interface AnalysisResult {
-  type: string
+  category: string
+  subtype: string
   title: string
   date: string | null
   doctor: string | null
@@ -35,7 +42,8 @@ interface AnalysisResult {
 interface DocumentData {
   id: string
   date: string
-  type: string
+  category: string
+  subtype: string
   title: string
   doctor?: string | null
   specialty?: string | null
@@ -60,9 +68,6 @@ interface DocumentFormProps {
 
 /**
  * Форма для создания или редактирования медицинского документа.
- * Args:
- *   initialData (DocumentData): Начальные данные документа (для редактирования).
- *   mode ('create' | 'edit'): Режим формы.
  */
 export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps) {
   const router = useRouter()
@@ -80,7 +85,8 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
-    type: '',
+    category: '' as DocumentCategory | '',
+    subtype: '',
     title: '',
     doctor: '',
     specialty: '',
@@ -93,15 +99,24 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
     keyValues: {} as Record<string, string>,
   })
 
+  // Получить подтипы для текущей категории
+  const availableSubtypes = formData.category 
+    ? CATEGORY_SUBTYPES[formData.category as DocumentCategory] || []
+    : []
+
   // Инициализация формы данными документа при редактировании
   useEffect(() => {
     if (initialData && mode === 'edit') {
-      // Нормализуем тип к допустимому значению
-      const normalizedType = normalizeDocumentType(initialData.type)
+      // Нормализуем категорию и подтип
+      const { category, subtype } = normalizeDocumentType(
+        initialData.category || '',
+        initialData.subtype || ''
+      )
       
       setFormData({
         date: initialData.date.split('T')[0],
-        type: normalizedType,
+        category,
+        subtype,
         title: initialData.title,
         doctor: initialData.doctor || '',
         specialty: initialData.specialty || '',
@@ -175,12 +190,16 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
 
       const analysis: AnalysisResult = analyzeData as AnalysisResult
       
-      // Нормализуем тип от AI к допустимому значению
-      const normalizedType = normalizeDocumentType(analysis.type || '')
+      // Нормализуем категорию и подтип от AI
+      const { category, subtype } = normalizeDocumentType(
+        analysis.category || '',
+        analysis.subtype || ''
+      )
 
       setFormData({
         date: analysis.date || new Date().toISOString().split('T')[0],
-        type: normalizedType,
+        category,
+        subtype,
         title: analysis.title || '',
         doctor: analysis.doctor || '',
         specialty: analysis.specialty || '',
@@ -297,6 +316,15 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
     handleKeyValueChange(key, value)
   }
 
+  // При смене категории сбрасываем подтип
+  const handleCategoryChange = (value: string) => {
+    setFormData({ 
+      ...formData, 
+      category: value as DocumentCategory, 
+      subtype: '' // Сбрасываем подтип при смене категории
+    })
+  }
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
       <div className="space-y-2">
@@ -376,25 +404,47 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="type">Тип документа *</Label>
+          <Label htmlFor="category">Категория *</Label>
           <Select
             required
-            value={formData.type}
-            onValueChange={(value) => setFormData({ ...formData, type: value })}
+            value={formData.category}
+            onValueChange={handleCategoryChange}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Выберите тип" />
+              <SelectValue placeholder="Выберите категорию" />
             </SelectTrigger>
             <SelectContent>
-              {DOCUMENT_TYPES.map((type) => (
-                <SelectItem key={type.value} value={type.value}>
-                  {type.label}
+              {DOCUMENT_CATEGORIES.map((cat) => (
+                <SelectItem key={cat.value} value={cat.value}>
+                  {cat.icon} {cat.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       </div>
+
+      {formData.category && (
+        <div className="space-y-2">
+          <Label htmlFor="subtype">Тип документа *</Label>
+          <Select
+            required
+            value={formData.subtype}
+            onValueChange={(value) => setFormData({ ...formData, subtype: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Выберите тип" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableSubtypes.map((sub) => (
+                <SelectItem key={sub.value} value={sub.value}>
+                  {sub.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="title">Название *</Label>
@@ -627,7 +677,7 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
       </div>
 
       <div className="flex gap-4 pt-4">
-        <Button type="submit" disabled={loading || !formData.type || !formData.title}>
+        <Button type="submit" disabled={loading || !formData.category || !formData.subtype || !formData.title}>
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

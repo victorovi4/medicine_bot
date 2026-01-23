@@ -1,19 +1,66 @@
-import { PATIENT } from '@/lib/types'
+import { PATIENT, getFullName, getAge, getFormattedBirthDate } from '@/lib/patient'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 
 export function PatientHeader() {
+  const hasComorbidities = PATIENT.comorbidities.length > 0
+  
   return (
-    <Card className="mb-6 bg-blue-50 border-blue-200">
+    <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
       <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-blue-900">{PATIENT.fullName}</h1>
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+          {/* Основная информация */}
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-blue-900">
+              {getFullName()}
+            </h1>
             <p className="text-blue-700">
-              Дата рождения: {PATIENT.birthDate} ({PATIENT.age} лет)
+              {getFormattedBirthDate()} ({getAge()} лет)
             </p>
+            
+            {/* Основной диагноз */}
+            {PATIENT.mainDiagnosis && (
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-sm text-gray-600">Основной диагноз:</span>
+                <Badge variant="destructive" className="font-medium">
+                  {PATIENT.mainDiagnosis}
+                  {PATIENT.mainDiagnosisCode && (
+                    <span className="ml-1 opacity-75">({PATIENT.mainDiagnosisCode})</span>
+                  )}
+                </Badge>
+              </div>
+            )}
+            
+            {/* Сопутствующие заболевания */}
+            {hasComorbidities && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-gray-600">Сопутствующие:</span>
+                {PATIENT.comorbidities.map((disease) => (
+                  <Badge key={disease} variant="secondary" className="text-xs">
+                    {disease}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="text-right text-sm text-blue-600">
-            <p>Медицинская карта</p>
+          
+          {/* Правая колонка */}
+          <div className="text-right space-y-2">
+            <p className="text-sm font-medium text-blue-800">Медицинская карта</p>
+            
+            {/* Отслеживаемые показатели */}
+            {PATIENT.trackingMetrics.length > 0 && (
+              <div className="text-xs text-gray-500">
+                <p className="mb-1">Отслеживаем:</p>
+                <div className="flex flex-wrap justify-end gap-1">
+                  {PATIENT.trackingMetrics.map((metric) => (
+                    <Badge key={metric} variant="outline" className="text-xs">
+                      {metric}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>

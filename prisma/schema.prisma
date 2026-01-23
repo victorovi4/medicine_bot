@@ -12,7 +12,8 @@ model Document {
   
   // Основная информация
   date      DateTime                    // Дата документа (когда сделан анализ/приём)
-  type      String                      // Тип: "анализ", "узи", "консультация", "выписка", "исследование"
+  category  String                      // Категория: "заключения", "анализы", "исследования"
+  subtype   String                      // Подтип: "консультация", "кровь", "кт" и т.д.
   title     String                      // Заголовок: "Биохимия крови", "КТ брюшной полости"
   
   // Где и кто
@@ -40,7 +41,8 @@ model Document {
   updatedAt DateTime @updatedAt
   
   @@index([date])
-  @@index([type])
+  @@index([category])
+  @@index([subtype])
   @@index([title])
 }
 

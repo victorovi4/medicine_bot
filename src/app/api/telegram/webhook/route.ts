@@ -490,10 +490,14 @@ async function checkDuplicatesAndSave(
   fileName?: string,
   fileType?: string
 ): Promise<void> {
-  const normalizedType = normalizeDocumentType(analysis.type || '')
+  // Нормализуем категорию и подтип
+  const { category, subtype } = normalizeDocumentType(
+    analysis.category || '',
+    analysis.subtype || ''
+  )
   const docDate = analysis.date ? new Date(analysis.date) : new Date()
 
-  // Ищем похожие документы (та же дата ±3 дня и похожий тип)
+  // Ищем похожие документы (та же дата ±3 дня и тот же подтип)
   const startDate = new Date(docDate)
   startDate.setDate(startDate.getDate() - 3)
   const endDate = new Date(docDate)
@@ -505,7 +509,7 @@ async function checkDuplicatesAndSave(
         gte: startDate,
         lte: endDate,
       },
-      type: normalizedType,
+      subtype: subtype,
     },
     orderBy: { date: 'desc' },
     take: 5,
@@ -522,7 +526,8 @@ async function checkDuplicatesAndSave(
   // Подготавливаем данные документа
   const documentData = {
     date: docDate.toISOString(),
-    type: normalizedType,
+    category,
+    subtype,
     title: analysis.title || 'Документ из Telegram',
     doctor: analysis.doctor,
     specialty: analysis.specialty,
@@ -591,7 +596,8 @@ async function checkDuplicatesAndSave(
     const document = await prisma.document.create({
       data: {
         date: docDate,
-        type: documentData.type,
+        category: documentData.category,
+        subtype: documentData.subtype,
         title: documentData.title,
         doctor: documentData.doctor,
         specialty: documentData.specialty,
@@ -653,7 +659,8 @@ async function handleCallbackQuery(
 
   const docData = pending.documentData as {
     date: string
-    type: string
+    category: string
+    subtype: string
     title: string
     doctor?: string | null
     specialty?: string | null
@@ -690,7 +697,8 @@ async function handleCallbackQuery(
     const document = await prisma.document.create({
       data: {
         date: new Date(docData.date),
-        type: docData.type,
+        category: docData.category,
+        subtype: docData.subtype,
         title: docData.title,
         doctor: docData.doctor,
         specialty: docData.specialty,
@@ -757,7 +765,8 @@ async function handleCallbackQuery(
       where: { id: pending.duplicateId },
       data: {
         date: new Date(docData.date),
-        type: docData.type,
+        category: docData.category,
+        subtype: docData.subtype,
         title: docData.title,
         doctor: docData.doctor,
         specialty: docData.specialty,
@@ -842,7 +851,9 @@ async function sendSuccessMessage(
     response += `📄 Страниц: ${pageCount}\n`
   }
 
-  if (analysis.type) response += `📁 Тип: ${analysis.type}\n`
+  if (analysis.category && analysis.subtype) {
+    response += `📁 ${analysis.category} / ${analysis.subtype}\n`
+  }
   if (analysis.doctor) response += `👨‍⚕️ Врач: ${analysis.doctor}\n`
 
   if (analysis.conclusion) {

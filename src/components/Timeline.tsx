@@ -3,7 +3,8 @@ import { DocumentCard } from './DocumentCard'
 interface Document {
   id: string
   date: Date
-  type: string
+  category: string
+  subtype: string
   title: string
   doctor?: string | null
   clinic?: string | null

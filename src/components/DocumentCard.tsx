@@ -2,11 +2,13 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { FileText, Calendar, User, Building } from 'lucide-react'
+import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
 
 interface DocumentCardProps {
   id: string
   date: Date
-  type: string
+  category: string
+  subtype: string
   title: string
   doctor?: string | null
   clinic?: string | null
@@ -18,7 +20,8 @@ interface DocumentCardProps {
 export function DocumentCard({
   id,
   date,
-  type,
+  category,
+  subtype,
   title,
   doctor,
   clinic,
@@ -32,13 +35,24 @@ export function DocumentCard({
     year: 'numeric',
   })
   
+  // Цвета для категорий
+  const categoryColors: Record<string, string> = {
+    'заключения': 'bg-purple-100 text-purple-800 border-purple-200',
+    'анализы': 'bg-green-100 text-green-800 border-green-200',
+    'исследования': 'bg-blue-100 text-blue-800 border-blue-200',
+    'другое': 'bg-gray-100 text-gray-800 border-gray-200',
+  }
+  
   return (
     <Link href={`/documents/${id}`}>
       <Card className="hover:shadow-md transition-shadow cursor-pointer">
         <CardHeader className="pb-2">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">{type}</Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge className={categoryColors[category] || categoryColors['другое']}>
+                {getCategoryLabel(category)}
+              </Badge>
+              <Badge variant="outline">{getSubtypeLabel(subtype)}</Badge>
               {fileUrl && <FileText className="h-4 w-4 text-gray-400" />}
             </div>
             <div className="flex items-center gap-1 text-sm text-gray-500">

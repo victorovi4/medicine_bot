@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeServerComponent } from '@/lib/test-mode'
+import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
 import { PatientHeader } from '@/components/PatientHeader'
 import { DocumentActions } from '@/components/DocumentActions'
 import { Button } from '@/components/ui/button'
@@ -52,8 +53,13 @@ export default async function DocumentPage({
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="outline">{document.type}</Badge>
+              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                  {getCategoryLabel(document.category)}
+                </Badge>
+                <Badge variant="outline">
+                  {getSubtypeLabel(document.subtype)}
+                </Badge>
                 {document.specialty && (
                   <Badge variant="secondary">{document.specialty}</Badge>
                 )}

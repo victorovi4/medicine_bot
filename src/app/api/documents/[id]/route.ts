@@ -39,7 +39,8 @@ export async function PUT(
       where: { id },
       data: {
         date: body.date ? new Date(body.date) : undefined,
-        type: body.type,
+        category: body.category,
+        subtype: body.subtype,
         title: body.title,
         doctor: body.doctor,
         specialty: body.specialty,
