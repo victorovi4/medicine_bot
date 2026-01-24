@@ -1,13 +1,16 @@
-import { test, expect } from '@playwright/test'
+import { test as base, expect } from '@playwright/test'
 
 type DocumentPayload = {
   date: string
-  type: string
+  category: string
+  subtype: string
   title: string
   doctor?: string | null
   specialty?: string | null
   clinic?: string | null
   summary?: string | null
+  conclusion?: string | null
+  recommendations?: string[]
   content?: string | null
   fileUrl?: string | null
   fileName?: string | null
@@ -22,8 +25,6 @@ type DocumentResponse = DocumentPayload & {
   updatedAt: string
 }
 
-let createdDocumentIds: string[] = []
-
 // Генерируем уникальный ID для каждого теста
 function uniqueId(): string {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
@@ -31,9 +32,52 @@ function uniqueId(): string {
 
 const useTestMode = process.env.E2E_TEST_MODE === 'true'
 
+type TestFixtures = {
+  createdDocuments: string[]
+  createDocument: (overrides?: Partial<DocumentPayload>) => Promise<DocumentResponse>
+}
+
+const test = base.extend<TestFixtures>({
+  createdDocuments: async ({}, use) => {
+    const ids: string[] = []
+    await use(ids)
+  },
+  createDocument: async ({ request, createdDocuments }, use) => {
+    await use(async (overrides: Partial<DocumentPayload> = {}) => {
+      const uid = uniqueId()
+      const payload: DocumentPayload = {
+        date: '2024-01-15',
+        category: 'анализы',
+        subtype: 'кровь',
+        title: `E2E-${uid}`,
+        doctor: 'Иванов И.И.',
+        specialty: 'терапевт',
+        clinic: 'Тестовая клиника',
+        summary: 'Краткое резюме для e2e теста.',
+        conclusion: 'Заключение врача для e2e теста.',
+        recommendations: ['Рекомендация 1', 'Рекомендация 2'],
+        content: 'Полный текст документа для e2e теста.',
+        tags: ['e2e', 'test'],
+        keyValues: { Гемоглобин: '130 г/л' },
+        ...overrides,
+      }
+
+      const response = await request.post('/api/documents', {
+        data: payload,
+      })
+
+      expect(response.status()).toBe(201)
+
+      const json = (await response.json()) as DocumentResponse
+      expect(json.id).toBeTruthy()
+      createdDocuments.push(json.id)
+
+      return json
+    })
+  },
+})
+
 test.beforeEach(async ({ context }) => {
-  createdDocumentIds = []
-  
   // Устанавливаем cookie для test-mode при навигации
   if (useTestMode) {
     const baseURL = process.env.E2E_BASE_URL || 'http://localhost:3000'
@@ -49,8 +93,8 @@ test.beforeEach(async ({ context }) => {
   }
 })
 
-test.afterEach(async ({ request }) => {
-  for (const id of createdDocumentIds) {
+test.afterEach(async ({ request, createdDocuments }) => {
+  for (const id of createdDocuments) {
     const response = await request.delete(`/api/documents/${id}`)
     const status = response.status()
     if (![200, 404].includes(status)) {
@@ -59,43 +103,12 @@ test.afterEach(async ({ request }) => {
   }
 })
 
-async function createDocument(
-  request: Parameters<typeof test>[0]['request'],
-  overrides: Partial<DocumentPayload> = {}
-): Promise<DocumentResponse> {
-  const uid = uniqueId()
-  const payload: DocumentPayload = {
-    date: '2024-01-15',
-    type: 'анализ',
-    title: `E2E-${uid}`,
-    doctor: 'Иванов И.И.',
-    specialty: 'терапевт',
-    clinic: 'Тестовая клиника',
-    summary: 'Краткое резюме для e2e теста.',
-    content: 'Полный текст документа для e2e теста.',
-    tags: ['e2e', 'test'],
-    keyValues: { Гемоглобин: '130 г/л' },
-    ...overrides,
-  }
-
-  const response = await request.post('/api/documents', {
-    data: payload,
-  })
-
-  expect(response.status()).toBe(201)
-
-  const json = (await response.json()) as DocumentResponse
-  expect(json.id).toBeTruthy()
-  createdDocumentIds.push(json.id)
-
-  return json
-}
-
 test.describe('Документы — детерминированные e2e', () => {
   test('GET /api/documents возвращает массив и содержит созданный документ', async ({
     request,
+    createDocument,
   }) => {
-    const created = await createDocument(request)
+    const created = await createDocument()
 
     const response = await request.get('/api/documents')
     expect(response.status()).toBe(200)
@@ -111,9 +124,9 @@ test.describe('Документы — детерминированные e2e', (
 
   test('клик на документ в списке открывает страницу документа', async ({
     page,
-    request,
+    createDocument,
   }) => {
-    const created = await createDocument(request)
+    const created = await createDocument()
 
     await page.goto('/')
     // Используем точное совпадение по ID документа через href
@@ -122,15 +135,43 @@ test.describe('Документы — детерминированные e2e', (
 
     await docLink.click()
     await expect(page).toHaveURL(new RegExp(`/documents/${created.id}$`))
-    // Используем getByText вместо getByRole('heading')
     await expect(page.getByText(created.title, { exact: true })).toBeVisible({ timeout: 10000 })
+  })
+
+  test('фильтр по категориям скрывает документы других категорий', async ({
+    page,
+    createDocument,
+  }) => {
+    const docAnalyses = await createDocument({
+      category: 'анализы',
+      subtype: 'биохимия',
+      title: `E2E-analyses-${uniqueId()}`,
+    })
+    const docStudies = await createDocument({
+      category: 'исследования',
+      subtype: 'узи',
+      title: `E2E-studies-${uniqueId()}`,
+    })
+
+    await page.goto('/')
+
+    await expect(page.locator(`a[href="/documents/${docAnalyses.id}"]`)).toBeVisible()
+    await expect(page.locator(`a[href="/documents/${docStudies.id}"]`)).toBeVisible()
+
+    await page.getByRole('button', { name: /Анализы/i }).click()
+    await expect(page.locator(`a[href="/documents/${docAnalyses.id}"]`)).toBeVisible()
+    await expect(page.locator(`a[href="/documents/${docStudies.id}"]`)).toHaveCount(0)
+
+    await page.getByRole('button', { name: /Исследования/i }).click()
+    await expect(page.locator(`a[href="/documents/${docStudies.id}"]`)).toBeVisible()
+    await expect(page.locator(`a[href="/documents/${docAnalyses.id}"]`)).toHaveCount(0)
   })
 
   test('кнопка редактирования ведёт на страницу edit и сохраняет изменения', async ({
     page,
-    request,
+    createDocument,
   }) => {
-    const created = await createDocument(request)
+    const created = await createDocument()
     const updatedTitle = `${created.title}-updated`
 
     await page.goto(`/documents/${created.id}`)
@@ -155,11 +196,32 @@ test.describe('Документы — детерминированные e2e', (
     await expect(page.getByText(updatedTitle, { exact: true })).toBeVisible({ timeout: 10000 })
   })
 
+  test('детальная страница показывает заключение и рекомендации', async ({
+    page,
+    createDocument,
+  }) => {
+    const created = await createDocument({
+      title: `E2E-detail-${uniqueId()}`,
+      conclusion: 'Дословное заключение для проверки.',
+      recommendations: ['Сдать анализ крови', 'Повторить УЗИ'],
+    })
+
+    await page.goto(`/documents/${created.id}`)
+    await expect(page.getByText(created.title, { exact: true })).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('Заключение врача', { exact: true })).toBeVisible()
+    await expect(page.getByText('Дословное заключение для проверки.')).toBeVisible()
+    await expect(page.getByText('Рекомендации', { exact: true })).toBeVisible()
+    await expect(page.getByText('Сдать анализ крови')).toBeVisible()
+    await expect(page.getByText('Повторить УЗИ')).toBeVisible()
+  })
+
   test('удаление документа удаляет его из базы и скрывает из списка', async ({
     page,
     request,
+    createDocument,
+    createdDocuments,
   }) => {
-    const created = await createDocument(request)
+    const created = await createDocument()
 
     await page.goto(`/documents/${created.id}`)
     await expect(page.getByText(created.title, { exact: true })).toBeVisible({ timeout: 10000 })
@@ -178,7 +240,10 @@ test.describe('Документы — детерминированные e2e', (
     await page.goto('/')
     await expect(page.locator(`a[href="/documents/${created.id}"]`)).toHaveCount(0)
 
-    createdDocumentIds = createdDocumentIds.filter((id) => id !== created.id)
+    const index = createdDocuments.indexOf(created.id)
+    if (index >= 0) {
+      createdDocuments.splice(index, 1)
+    }
   })
 
   test('GET /api/documents/[id] возвращает 404 для невалидного id', async ({

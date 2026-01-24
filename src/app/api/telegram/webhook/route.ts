@@ -59,11 +59,12 @@ export async function POST(request: NextRequest) {
           `Я помогаю добавлять документы в медицинскую карту.\n\n` +
           `📄 Просто отправьте фото или PDF документа.\n\n` +
           `📎 Если документ на нескольких фото — нажмите кнопку "📎 Много фото" внизу.\n\n` +
+          `📋 Для генерации выписки 027/у нажмите "📋 Выписка"\n\n` +
           `🔗 Карта: ${process.env.NEXT_PUBLIC_APP_URL}`,
         {
           reply_markup: {
             keyboard: [
-              [{ text: '📎 Много фото' }],
+              [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
               [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
             ],
             resize_keyboard: true,
@@ -82,7 +83,8 @@ export async function POST(request: NextRequest) {
           `1. Нажмите "📎 Много фото"\n` +
           `2. Отправляйте фото по одному\n` +
           `3. Нажмите "✅ Готово"\n\n` +
-          `Команды: /status, /last, /cancel`
+          `📋 Выписка — генерация выписки 027/у за последний год.\n\n` +
+          `Команды: /status, /last, /extract, /cancel`
       )
       return NextResponse.json({ ok: true })
     }
@@ -191,22 +193,29 @@ export async function POST(request: NextRequest) {
           `❌ Сбор отменён.${pageCount > 0 ? ` Удалено ${pageCount} страниц.` : ''}`,
           {
             reply_markup: {
-              keyboard: [
-                [{ text: '📎 Много фото' }],
-                [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-              ],
-              resize_keyboard: true,
-            },
-          }
-        )
-      } else {
-        await sendMessage(chatId, `ℹ️ Нет активного сбора страниц.`)
+            keyboard: [
+              [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
+              [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+            ],
+            resize_keyboard: true,
+          },
+        }
+      )
+    } else {
+      await sendMessage(chatId, `ℹ️ Нет активного сбора страниц.`)
       }
       return NextResponse.json({ ok: true })
     }
 
     if (message.text === '/done' || message.text === '✅ Готово') {
       await processBatch(chatId)
+      return NextResponse.json({ ok: true })
+    }
+
+    // === ВЫПИСКА 027/у ===
+
+    if (message.text === '/extract' || message.text === '📋 Выписка') {
+      await generateExtract(chatId)
       return NextResponse.json({ ok: true })
     }
 
@@ -683,7 +692,7 @@ async function handleCallbackQuery(
     await sendMessage(chatId, '📂 Готов к новым документам!', {
       reply_markup: {
         keyboard: [
-          [{ text: '📎 Много фото' }],
+          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
           [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
         ],
         resize_keyboard: true,
@@ -729,7 +738,7 @@ async function handleCallbackQuery(
     await sendMessage(chatId, '📂 Готов к новым документам!', {
       reply_markup: {
         keyboard: [
-          [{ text: '📎 Много фото' }],
+          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
           [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
         ],
         resize_keyboard: true,
@@ -800,7 +809,7 @@ async function handleCallbackQuery(
     await sendMessage(chatId, '📂 Готов к новым документам!', {
       reply_markup: {
         keyboard: [
-          [{ text: '📎 Много фото' }],
+          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
           [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
         ],
         resize_keyboard: true,
@@ -822,7 +831,7 @@ async function handleCallbackQuery(
       await sendMessage(chatId, `❌ Произошла ошибка при обработке. Попробуйте ещё раз.`, {
         reply_markup: {
           keyboard: [
-            [{ text: '📎 Много фото' }],
+            [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
             [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
           ],
           resize_keyboard: true,
@@ -885,7 +894,7 @@ async function sendSuccessMessage(
   await sendMessage(chatId, response, {
     reply_markup: {
       keyboard: [
-        [{ text: '📎 Много фото' }],
+        [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
         [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
       ],
       resize_keyboard: true,
@@ -900,4 +909,98 @@ function pluralize(n: number, one: string, few: string, many: string): string {
   if (mod10 === 1) return one
   if (mod10 >= 2 && mod10 <= 4) return few
   return many
+}
+
+/**
+ * Генерация выписки 027/у.
+ */
+async function generateExtract(chatId: number): Promise<void> {
+  try {
+    await sendMessage(chatId, '📋 Генерирую выписку 027/у...\nЭто может занять минуту.')
+
+    // Определяем период: последний год
+    const today = new Date()
+    const yearAgo = new Date(today)
+    yearAgo.setFullYear(yearAgo.getFullYear() - 1)
+
+    const fromDate = yearAgo.toISOString().split('T')[0]
+    const toDate = today.toISOString().split('T')[0]
+
+    // Вызываем API
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const response = await fetch(`${baseUrl}/api/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromDate, toDate }),
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(data.error || 'Ошибка генерации')
+    }
+
+    const extract = await response.json()
+
+    // Формируем текст выписки для Telegram
+    let text = `📋 *ВЫПИСКА 027/у*\n\n`
+    text += `👤 Пациент: ${extract.patient.fullName}\n`
+    text += `📅 Период: ${extract.period.from} — ${extract.period.to}\n`
+    text += `📄 Документов: ${extract.documentsCount}\n\n`
+
+    text += `*🏥 Диагноз:*\n${extract.diagnosis.main}\n`
+    if (extract.diagnosis.secondary && extract.diagnosis.secondary.length > 0) {
+      text += `Сопутствующие: ${extract.diagnosis.secondary.join('; ')}\n`
+    }
+    text += '\n'
+
+    // Сокращаем длинные секции для Telegram
+    const maxLen = 400
+
+    if (extract.anamnesis && extract.anamnesis !== 'Данные отсутствуют') {
+      const anamnesis = extract.anamnesis.length > maxLen 
+        ? extract.anamnesis.substring(0, maxLen) + '...' 
+        : extract.anamnesis
+      text += `*📜 Анамнез:*\n${anamnesis}\n\n`
+    }
+
+    if (extract.currentState && extract.currentState !== 'Данные отсутствуют') {
+      text += `*❤️ Текущее состояние:*\n${extract.currentState}\n\n`
+    }
+
+    if (extract.recommendations && extract.recommendations !== 'Данные отсутствуют') {
+      const recs = extract.recommendations.length > maxLen 
+        ? extract.recommendations.substring(0, maxLen) + '...' 
+        : extract.recommendations
+      text += `*✅ Рекомендации:*\n${recs}\n\n`
+    }
+
+    text += `🔗 Полная версия: ${baseUrl}/extract`
+
+    await sendMessage(chatId, text, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        keyboard: [
+          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
+          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+        ],
+        resize_keyboard: true,
+      },
+    })
+  } catch (error) {
+    console.error('Extract generation error:', error)
+    const msg = error instanceof Error ? error.message : 'Неизвестная ошибка'
+    await sendMessage(
+      chatId,
+      `❌ Ошибка генерации выписки: ${msg}\n\nПопробуйте на сайте: ${process.env.NEXT_PUBLIC_APP_URL}/extract`,
+      {
+        reply_markup: {
+          keyboard: [
+            [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
+            [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+          ],
+          resize_keyboard: true,
+        },
+      }
+    )
+  }
 }

@@ -11,6 +11,7 @@ interface DocumentCardProps {
   subtype: string
   title: string
   doctor?: string | null
+  specialty?: string | null
   clinic?: string | null
   summary?: string | null
   tags?: string[]
@@ -24,6 +25,7 @@ export function DocumentCard({
   subtype,
   title,
   doctor,
+  specialty,
   clinic,
   summary,
   tags,
@@ -68,6 +70,11 @@ export function DocumentCard({
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <User className="h-4 w-4" />
                 {doctor}
+              </div>
+            )}
+            {specialty && (
+              <div className="text-sm text-gray-600">
+                Специальность: {specialty}
               </div>
             )}
             {clinic && (

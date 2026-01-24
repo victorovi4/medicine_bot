@@ -123,3 +123,52 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Print styles for Extract 027/у */
+@media print {
+  /* Скрываем всё кроме выписки */
+  body * {
+    visibility: hidden;
+  }
+  
+  #extract-document,
+  #extract-document * {
+    visibility: visible;
+  }
+  
+  #extract-document {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 15mm;
+  }
+  
+  /* Убираем тени и границы */
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  .print\:border-none {
+    border: none !important;
+  }
+  
+  /* Скрываем элементы с классом print:hidden */
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Белый фон для печати */
+  body {
+    background: white !important;
+  }
+  
+  /* Убираем цветной текст */
+  #extract-document {
+    color: black !important;
+  }
+  
+  #extract-document .text-blue-600 {
+    color: #333 !important;
+  }
+}
