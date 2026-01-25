@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { PatientHeader } from '@/components/PatientHeader'
+import { MetricsGrid } from '@/components/MetricsChart'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
@@ -20,7 +21,8 @@ import {
   ClipboardList,
   ArrowLeft,
   RefreshCw,
-  Clock
+  Clock,
+  Activity
 } from 'lucide-react'
 
 interface ExtractData {
@@ -51,33 +53,72 @@ interface ExtractData {
   needsGeneration?: boolean
 }
 
+interface MetricDataPoint {
+  date: string
+  value: number
+  documentId: string
+  documentTitle: string
+}
+
+interface MetricSummary {
+  name: string
+  unit: string
+  color: string
+  normalMin: number
+  normalMax: number
+  critical?: number
+  dataPoints: MetricDataPoint[]
+  firstValue: number | null
+  lastValue: number | null
+  minValue: number | null
+  maxValue: number | null
+  changePercent: number
+  changeDirection: 'up' | 'down' | 'stable'
+  lastStatus: 'normal' | 'low' | 'high' | 'critical' | 'unknown'
+}
+
+interface MetricsResponse {
+  period: { from: string; to: string }
+  metrics: MetricSummary[]
+}
+
 export default function ExtractPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [extract, setExtract] = useState<ExtractData | null>(null)
+  const [metrics, setMetrics] = useState<MetricSummary[]>([])
   const [copied, setCopied] = useState(false)
   
-  // Загружаем кэшированную выписку при открытии
+  // Загружаем кэшированную выписку и метрики при открытии
   useEffect(() => {
-    loadCachedExtract()
+    loadData()
   }, [])
   
-  const loadCachedExtract = async () => {
+  const loadData = async () => {
     setLoading(true)
     setError(null)
     
     try {
-      const response = await fetch('/api/extract')
-      const data = await response.json()
+      // Загружаем выписку и метрики параллельно
+      const [extractRes, metricsRes] = await Promise.all([
+        fetch('/api/extract'),
+        fetch('/api/metrics'),
+      ])
       
-      if (data.needsGeneration) {
-        // Выписка ещё не сгенерирована
+      const extractData = await extractRes.json()
+      const metricsData: MetricsResponse = await metricsRes.json()
+      
+      if (extractData.needsGeneration) {
         setExtract(null)
-      } else if (data.error) {
-        setError(data.error)
+      } else if (extractData.error) {
+        setError(extractData.error)
       } else {
-        setExtract(data)
+        setExtract(extractData)
+      }
+      
+      if (metricsData.metrics) {
+        setMetrics(metricsData.metrics)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки')
@@ -114,7 +155,7 @@ export default function ExtractPage() {
   const copyToClipboard = () => {
     if (!extract) return
     
-    const text = formatExtractAsText(extract)
+    const text = formatExtractAsText(extract, metrics)
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -299,6 +340,26 @@ export default function ExtractPage() {
                 <p className="whitespace-pre-wrap">{extract.diagnosticStudies}</p>
               </Section>
               
+              {/* Динамика показателей — ГРАФИКИ */}
+              <Section
+                icon={<Activity className="h-5 w-5" />}
+                title="Динамика ключевых показателей"
+              >
+                {metrics.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Таблица сводки */}
+                    <MetricsSummaryTable metrics={metrics} />
+                    
+                    {/* Графики */}
+                    <MetricsGrid metrics={metrics} compact />
+                  </div>
+                ) : (
+                  <p className="text-gray-500">
+                    Данные о динамике показателей отсутствуют.
+                  </p>
+                )}
+              </Section>
+              
               {/* Лечение */}
               <Section
                 icon={<Pill className="h-5 w-5" />}
@@ -307,10 +368,10 @@ export default function ExtractPage() {
                 <p className="whitespace-pre-wrap">{extract.treatment}</p>
               </Section>
               
-              {/* Динамика */}
+              {/* Динамика (AI) */}
               <Section
                 icon={<TrendingUp className="h-5 w-5" />}
-                title="Динамика состояния"
+                title="Описание динамики состояния"
               >
                 <p className="whitespace-pre-wrap">{extract.dynamics}</p>
               </Section>
@@ -370,9 +431,85 @@ function Section({
   )
 }
 
+// Таблица сводки по показателям
+function MetricsSummaryTable({ metrics }: { metrics: MetricSummary[] }) {
+  const metricsWithData = metrics.filter(m => m.dataPoints.length > 0)
+  
+  if (metricsWithData.length === 0) return null
+  
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left py-2 pr-4">Показатель</th>
+            <th className="text-right py-2 px-2">Начало</th>
+            <th className="text-right py-2 px-2">Конец</th>
+            <th className="text-right py-2 px-2">Изменение</th>
+            <th className="text-left py-2 pl-2">Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          {metricsWithData.map((m) => (
+            <tr key={m.name} className="border-b">
+              <td className="py-2 pr-4 font-medium">{m.name}</td>
+              <td className="py-2 px-2 text-right">
+                {m.firstValue !== null ? `${m.firstValue} ${m.unit}` : '—'}
+              </td>
+              <td className="py-2 px-2 text-right">
+                {m.lastValue !== null ? `${m.lastValue} ${m.unit}` : '—'}
+              </td>
+              <td className="py-2 px-2 text-right">
+                {m.changePercent !== 0 ? (
+                  <span className={
+                    m.name.includes('ПСА') 
+                      ? (m.changeDirection === 'up' ? 'text-red-600' : 'text-green-600')
+                      : ''
+                  }>
+                    {m.changeDirection === 'up' ? '↑' : m.changeDirection === 'down' ? '↓' : '→'}
+                    {' '}
+                    {m.changePercent > 0 ? '+' : ''}{m.changePercent}%
+                  </span>
+                ) : '→ 0%'}
+              </td>
+              <td className="py-2 pl-2">
+                <StatusBadge status={m.lastStatus} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    normal: 'bg-green-100 text-green-800',
+    low: 'bg-blue-100 text-blue-800',
+    high: 'bg-orange-100 text-orange-800',
+    critical: 'bg-red-100 text-red-800',
+    unknown: 'bg-gray-100 text-gray-600',
+  }
+  
+  const labels: Record<string, string> = {
+    normal: 'Норма',
+    low: 'Ниже нормы',
+    high: 'Выше нормы',
+    critical: 'Критично',
+    unknown: '—',
+  }
+  
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs ${styles[status] || styles.unknown}`}>
+      {labels[status] || status}
+    </span>
+  )
+}
+
 // Форматирование в текст для копирования
-function formatExtractAsText(extract: ExtractData): string {
-  return `
+function formatExtractAsText(extract: ExtractData, metrics: MetricSummary[]): string {
+  let text = `
 ВЫПИСКА ИЗ МЕДИЦИНСКОЙ КАРТЫ АМБУЛАТОРНОГО БОЛЬНОГО
 Форма № 027/у
 
@@ -390,6 +527,21 @@ ${extract.anamnesis}
 ДИАГНОСТИЧЕСКИЕ ИССЛЕДОВАНИЯ
 ${extract.diagnosticStudies}
 
+ДИНАМИКА КЛЮЧЕВЫХ ПОКАЗАТЕЛЕЙ
+`
+
+  const metricsWithData = metrics.filter(m => m.dataPoints.length > 0)
+  if (metricsWithData.length > 0) {
+    text += metricsWithData.map(m => {
+      const arrow = m.changeDirection === 'up' ? '↑' : m.changeDirection === 'down' ? '↓' : '→'
+      return `${m.name}: ${m.firstValue} → ${m.lastValue} ${m.unit} (${arrow} ${m.changePercent > 0 ? '+' : ''}${m.changePercent}%)`
+    }).join('\n')
+    text += '\n'
+  } else {
+    text += 'Данные отсутствуют\n'
+  }
+
+  text += `
 ПРОВЕДЁННОЕ ЛЕЧЕНИЕ
 ${extract.treatment}
 
@@ -405,5 +557,7 @@ ${extract.recommendations}
 ---
 Выписка сгенерирована: ${new Date(extract.generatedAt).toLocaleString('ru-RU')}
 Документов в периоде: ${extract.documentsCount}
-`.trim()
+`
+
+  return text.trim()
 }

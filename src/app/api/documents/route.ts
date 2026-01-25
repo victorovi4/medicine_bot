@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
+import { extractMeasurements } from '@/lib/metrics'
 
 /**
  * Триггер фоновой регенерации выписки.
@@ -42,9 +43,14 @@ export async function POST(request: NextRequest) {
     const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
     const body = await request.json()
     
+    const documentDate = new Date(body.date)
+    
+    // Извлекаем измерения из keyValues
+    const measurements = extractMeasurements(body.keyValues)
+    
     const document = await prisma.document.create({
       data: {
-        date: new Date(body.date),
+        date: documentDate,
         category: body.category,
         subtype: body.subtype,
         title: body.title,
@@ -60,6 +66,15 @@ export async function POST(request: NextRequest) {
         fileType: body.fileType || null,
         tags: body.tags || [],
         keyValues: body.keyValues || null,
+        // Создаём измерения вместе с документом
+        measurements: {
+          create: measurements.map(m => ({
+            name: m.name,
+            value: m.value,
+            unit: m.unit,
+            date: documentDate,
+          })),
+        },
       },
     })
     
