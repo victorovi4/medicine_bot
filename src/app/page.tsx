@@ -4,7 +4,7 @@ import { isTestModeServerComponent } from '@/lib/test-mode'
 import { PatientHeader } from '@/components/PatientHeader'
 import { CategoryFilter } from '@/components/CategoryFilter'
 import { Button } from '@/components/ui/button'
-import { Plus, FileText } from 'lucide-react'
+import { Plus, FileText, Activity } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +31,12 @@ export default async function HomePage() {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-xl font-semibold">История болезни</h2>
         <div className="flex gap-2">
+          <Link href="/metrics">
+            <Button variant="outline">
+              <Activity className="h-4 w-4 mr-2" />
+              Показатели
+            </Button>
+          </Link>
           <Link href="/extract">
             <Button variant="outline">
               <FileText className="h-4 w-4 mr-2" />
