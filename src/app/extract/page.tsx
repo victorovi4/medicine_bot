@@ -145,6 +145,13 @@ export default function ExtractPage() {
       
       const data = await response.json()
       setExtract(data)
+      
+      // Также перезагружаем метрики — они могли измениться
+      const metricsRes = await fetch('/api/metrics')
+      const metricsData: MetricsResponse = await metricsRes.json()
+      if (metricsData.metrics) {
+        setMetrics(metricsData.metrics)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка')
     } finally {

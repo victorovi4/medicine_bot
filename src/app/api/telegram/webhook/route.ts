@@ -4,6 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import { prisma } from '@/lib/db'
 import { analyzeDocument, analyzeMultipleImages, AnalysisResult } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
+import { extractMeasurements } from '@/lib/metrics'
 import {
   TelegramUpdate,
   sendMessage,
@@ -602,6 +603,9 @@ async function checkDuplicatesAndSave(
     })
   } else {
     // Дубликатов нет — сохраняем сразу
+    // Извлекаем измерения из keyValues
+    const measurements = extractMeasurements(documentData.keyValues as Record<string, string> | null)
+    
     const document = await prisma.document.create({
       data: {
         date: docDate,
@@ -620,6 +624,15 @@ async function checkDuplicatesAndSave(
         fileType: documentData.fileType,
         tags: documentData.tags,
         keyValues: documentData.keyValues,
+        // Создаём связанные измерения
+        measurements: {
+          create: measurements.map(m => ({
+            name: m.name,
+            value: m.value,
+            unit: m.unit,
+            date: docDate,
+          })),
+        },
       },
     })
 
@@ -703,9 +716,13 @@ async function handleCallbackQuery(
 
   if (action === 'add') {
     // Добавить как новый
+    // Извлекаем измерения из keyValues
+    const docDate = new Date(docData.date)
+    const measurements = extractMeasurements(docData.keyValues as Record<string, string> | null)
+    
     const document = await prisma.document.create({
       data: {
-        date: new Date(docData.date),
+        date: docDate,
         category: docData.category,
         subtype: docData.subtype,
         title: docData.title,
@@ -721,6 +738,15 @@ async function handleCallbackQuery(
         fileType: docData.fileType,
         tags: docData.tags || [],
         keyValues: docData.keyValues || undefined,
+        // Создаём связанные измерения
+        measurements: {
+          create: measurements.map(m => ({
+            name: m.name,
+            value: m.value,
+            unit: m.unit,
+            date: docDate,
+          })),
+        },
       },
     })
 
