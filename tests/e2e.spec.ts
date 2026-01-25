@@ -253,3 +253,122 @@ test.describe('Документы — детерминированные e2e', (
     expect(response.status()).toBe(404)
   })
 })
+
+test.describe('Метрики — e2e тесты', () => {
+  test('GET /api/metrics возвращает структуру с периодом и массивом метрик', async ({
+    request,
+  }) => {
+    const response = await request.get('/api/metrics')
+    expect(response.status()).toBe(200)
+
+    const data = await response.json()
+    expect(data.period).toBeDefined()
+    expect(data.period.from).toBeTruthy()
+    expect(data.period.to).toBeTruthy()
+    expect(Array.isArray(data.metrics)).toBe(true)
+  })
+
+  test('GET /api/metrics возвращает все отслеживаемые показатели', async ({
+    request,
+  }) => {
+    const response = await request.get('/api/metrics')
+    const data = await response.json()
+
+    const metricNames = data.metrics.map((m: { name: string }) => m.name)
+    expect(metricNames).toContain('ПСА общий')
+    expect(metricNames).toContain('ПСА свободный')
+    expect(metricNames).toContain('Гемоглобин')
+  })
+
+  test('каждая метрика имеет обязательные поля', async ({ request }) => {
+    const response = await request.get('/api/metrics')
+    const data = await response.json()
+
+    for (const metric of data.metrics) {
+      expect(metric.name).toBeTruthy()
+      expect(typeof metric.unit).toBe('string')
+      expect(typeof metric.color).toBe('string')
+      expect(typeof metric.normalMin).toBe('number')
+      expect(typeof metric.normalMax).toBe('number')
+      expect(Array.isArray(metric.dataPoints)).toBe(true)
+      expect(['up', 'down', 'stable']).toContain(metric.changeDirection)
+    }
+  })
+
+  test('документ с keyValues создаёт измерение', async ({
+    request,
+    createDocument,
+  }) => {
+    const uid = uniqueId()
+    await createDocument({
+      title: `E2E-metrics-${uid}`,
+      category: 'анализы',
+      subtype: 'кровь',
+      date: new Date().toISOString().split('T')[0],
+      keyValues: { 'Гемоглобин': '135 г/л' },
+    })
+
+    // Даём время на создание measurement
+    await new Promise(resolve => setTimeout(resolve, 500))
+
+    const response = await request.get('/api/metrics')
+    const data = await response.json()
+
+    const hemoglobin = data.metrics.find((m: { name: string }) => m.name === 'Гемоглобин')
+    expect(hemoglobin).toBeDefined()
+
+    // Проверяем, что есть dataPoint с нашим значением
+    const hasValue = hemoglobin.dataPoints.some(
+      (dp: { value: number }) => dp.value === 135
+    )
+    expect(hasValue).toBe(true)
+  })
+})
+
+test.describe('Выписка 027/у — e2e тесты', () => {
+  test('GET /api/extract возвращает структуру выписки или null', async ({
+    request,
+  }) => {
+    const response = await request.get('/api/extract')
+    expect(response.status()).toBe(200)
+
+    const data = await response.json()
+    // Может быть cached: true с данными или null если нет кэша
+    if (data && data.patient) {
+      expect(data.patient.fullName).toBeTruthy()
+      expect(data.period).toBeDefined()
+      expect(data.diagnosis).toBeDefined()
+    }
+  })
+
+  test('страница /extract доступна и показывает заголовок', async ({ page }) => {
+    await page.goto('/extract')
+    await expect(page.getByText('Выписка 027/у')).toBeVisible({ timeout: 10000 })
+  })
+
+  test('страница /extract показывает информацию о пациенте', async ({ page }) => {
+    await page.goto('/extract')
+    // Ждём загрузки страницы
+    await expect(page.getByText('Иоффе Виктор Борисович')).toBeVisible({ timeout: 10000 })
+  })
+
+  test('страница /extract имеет кнопку "Обновить"', async ({ page }) => {
+    await page.goto('/extract')
+    await expect(page.getByRole('button', { name: /обновить/i })).toBeVisible({ timeout: 10000 })
+  })
+
+  test('страница /extract показывает секцию динамики показателей', async ({ page }) => {
+    await page.goto('/extract')
+    // Проверяем наличие секции с графиками
+    await expect(page.getByText(/динамика.*показателей/i)).toBeVisible({ timeout: 15000 })
+  })
+
+  test('главная страница имеет ссылку на выписку', async ({ page }) => {
+    await page.goto('/')
+    const extractLink = page.getByRole('link', { name: /выписка/i })
+    await expect(extractLink).toBeVisible({ timeout: 10000 })
+    
+    await extractLink.click()
+    await expect(page).toHaveURL(/\/extract$/)
+  })
+})
