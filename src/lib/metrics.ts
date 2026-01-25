@@ -108,8 +108,34 @@ export function parseValueWithUnit(str: string): { value: number; unit: string }
 }
 
 /**
+ * Валидация и автокоррекция значений.
+ * Исправляет очевидные ошибки OCR (например, 9.2 г/л -> 92 г/л для гемоглобина).
+ */
+function validateAndCorrectValue(
+  metricName: string,
+  value: number
+): { value: number; corrected: boolean } {
+  // Гемоглобин: норма 130-160 г/л, значения < 30 г/л невозможны
+  // Если значение < 30, скорее всего OCR пропустил цифру (9.2 -> 92, 8.4 -> 84)
+  if (metricName === 'Гемоглобин') {
+    if (value < 30 && value > 0) {
+      // Вероятно, значение должно быть умножено на 10
+      return { value: value * 10, corrected: true }
+    }
+  }
+  
+  // ПСА: отрицательные значения невозможны
+  if (metricName.includes('ПСА') && value < 0) {
+    return { value: 0, corrected: true }
+  }
+  
+  return { value, corrected: false }
+}
+
+/**
  * Извлекает измерения из keyValues документа.
  * Возвращает массив { name, value, unit } для отслеживаемых показателей.
+ * Включает валидацию и автокоррекцию очевидных ошибок OCR.
  */
 export function extractMeasurements(
   keyValues: Record<string, string> | null | undefined
@@ -132,9 +158,12 @@ export function extractMeasurements(
     const parsed = parseValueWithUnit(valueStr)
     if (!parsed) continue
     
+    // Валидируем и корректируем значение
+    const { value: correctedValue } = validateAndCorrectValue(canonicalName, parsed.value)
+    
     measurements.push({
       name: canonicalName,
-      value: parsed.value,
+      value: correctedValue,
       unit: parsed.unit || config.unit,
     })
   }

@@ -4,6 +4,9 @@ import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
 import { PATIENT, getFullName, getAge, getFormattedBirthDate, getTreatmentStartDate } from '@/lib/patient'
 import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
+import type { Prisma } from '@prisma/client'
+
+type DocumentModel = Prisma.DocumentGetPayload<object>
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -222,7 +225,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Формируем текст документов для Claude
-    const documentsText = documents.map((doc) => {
+    const documentsText = documents.map((doc: DocumentModel) => {
       const date = new Date(doc.date).toLocaleDateString('ru-RU')
       const categoryLabel = getCategoryLabel(doc.category)
       const subtypeLabel = getSubtypeLabel(doc.subtype)
