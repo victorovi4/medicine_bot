@@ -143,10 +143,21 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/metrics/sync — ретроактивный парсинг показателей из существующих документов.
+ * Query params: force=true — удалить все измерения и пересоздать.
  */
 export async function POST(request: NextRequest) {
   try {
     const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
+    const { searchParams } = new URL(request.url)
+    const force = searchParams.get('force') === 'true'
+    
+    let deleted = 0
+    
+    // Если force=true, удаляем все измерения
+    if (force) {
+      const deleteResult = await prisma.measurement.deleteMany({})
+      deleted = deleteResult.count
+    }
     
     // Получаем все документы
     const allDocuments = await prisma.document.findMany({
@@ -171,17 +182,19 @@ export async function POST(request: NextRequest) {
       const measurements = extractMeasurements(keyValues)
       
       for (const m of measurements) {
-        // Проверяем, нет ли уже такого измерения
-        const existing = await prisma.measurement.findFirst({
-          where: {
-            documentId: doc.id,
-            name: m.name,
-          },
-        })
-        
-        if (existing) {
-          skipped++
-          continue
+        // Проверяем, нет ли уже такого измерения (если не force)
+        if (!force) {
+          const existing = await prisma.measurement.findFirst({
+            where: {
+              documentId: doc.id,
+              name: m.name,
+            },
+          })
+          
+          if (existing) {
+            skipped++
+            continue
+          }
         }
         
         await prisma.measurement.create({
@@ -199,6 +212,8 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json({
       success: true,
+      force,
+      deleted,
       documentsProcessed: documents.length,
       measurementsCreated: created,
       measurementsSkipped: skipped,
