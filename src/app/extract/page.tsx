@@ -1,11 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { PatientHeader } from '@/components/PatientHeader'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { 
   Loader2, 
@@ -20,7 +18,9 @@ import {
   TrendingUp,
   Heart,
   ClipboardList,
-  ArrowLeft
+  ArrowLeft,
+  RefreshCw,
+  Clock
 } from 'lucide-react'
 
 interface ExtractData {
@@ -47,31 +47,54 @@ interface ExtractData {
   recommendations: string
   documentsCount: number
   generatedAt: string
+  cached?: boolean
+  needsGeneration?: boolean
 }
 
 export default function ExtractPage() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [extract, setExtract] = useState<ExtractData | null>(null)
   const [copied, setCopied] = useState(false)
   
-  // По умолчанию: последний год
-  const today = new Date()
-  const yearAgo = new Date(today)
-  yearAgo.setFullYear(yearAgo.getFullYear() - 1)
+  // Загружаем кэшированную выписку при открытии
+  useEffect(() => {
+    loadCachedExtract()
+  }, [])
   
-  const [fromDate, setFromDate] = useState(yearAgo.toISOString().split('T')[0])
-  const [toDate, setToDate] = useState(today.toISOString().split('T')[0])
-  
-  const generateExtract = async () => {
+  const loadCachedExtract = async () => {
     setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch('/api/extract')
+      const data = await response.json()
+      
+      if (data.needsGeneration) {
+        // Выписка ещё не сгенерирована
+        setExtract(null)
+      } else if (data.error) {
+        setError(data.error)
+      } else {
+        setExtract(data)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ошибка загрузки')
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  const generateExtract = async (forceRegenerate = false) => {
+    setGenerating(true)
     setError(null)
     
     try {
       const response = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fromDate, toDate }),
+        body: JSON.stringify({ forceRegenerate }),
       })
       
       if (!response.ok) {
@@ -84,7 +107,7 @@ export default function ExtractPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка')
     } finally {
-      setLoading(false)
+      setGenerating(false)
     }
   }
   
@@ -98,8 +121,19 @@ export default function ExtractPage() {
   }
   
   const downloadPdf = () => {
-    // Открываем страницу печати, которую можно сохранить как PDF
     window.print()
+  }
+  
+  if (loading) {
+    return (
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
+        <PatientHeader />
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="ml-3 text-gray-600">Загрузка выписки...</span>
+        </div>
+      </main>
+    )
   }
   
   return (
@@ -111,7 +145,7 @@ export default function ExtractPage() {
       <div className="mb-6 flex items-center justify-between print:hidden">
         <div>
           <h2 className="text-xl font-semibold">Выписка из истории болезни</h2>
-          <p className="text-gray-500 text-sm">Форма 027/у</p>
+          <p className="text-gray-500 text-sm">Форма 027/у — текущий период лечения</p>
         </div>
         <Link href="/">
           <Button variant="outline">
@@ -121,32 +155,25 @@ export default function ExtractPage() {
         </Link>
       </div>
       
-      {/* Форма выбора периода */}
-      <Card className="mb-6 print:hidden">
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="space-y-2">
-              <Label htmlFor="fromDate">Период с</Label>
-              <Input
-                id="fromDate"
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="toDate">по</Label>
-              <Input
-                id="toDate"
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="w-40"
-              />
-            </div>
-            <Button onClick={generateExtract} disabled={loading}>
-              {loading ? (
+      {error && (
+        <Card className="mb-6 border-red-200 bg-red-50 print:hidden">
+          <CardContent className="pt-6">
+            <p className="text-red-600">{error}</p>
+          </CardContent>
+        </Card>
+      )}
+      
+      {/* Если выписки нет — предлагаем сгенерировать */}
+      {!extract && !error && (
+        <Card className="mb-6 print:hidden">
+          <CardContent className="pt-6 text-center">
+            <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium mb-2">Выписка ещё не сгенерирована</h3>
+            <p className="text-gray-500 mb-4">
+              Нажмите кнопку, чтобы создать выписку за период лечения
+            </p>
+            <Button onClick={() => generateExtract()} disabled={generating}>
+              {generating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Генерация...
@@ -158,19 +185,15 @@ export default function ExtractPage() {
                 </>
               )}
             </Button>
-          </div>
-          
-          {error && (
-            <p className="text-red-600 mt-4">{error}</p>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Выписка */}
       {extract && (
         <div className="space-y-4">
           {/* Кнопки действий */}
-          <div className="flex gap-2 print:hidden">
+          <div className="flex flex-wrap gap-2 print:hidden">
             <Button variant="outline" onClick={downloadPdf}>
               <Download className="h-4 w-4 mr-2" />
               Скачать PDF
@@ -188,6 +211,26 @@ export default function ExtractPage() {
                 </>
               )}
             </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => generateExtract(true)}
+              disabled={generating}
+            >
+              {generating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Обновить
+            </Button>
+            
+            {/* Информация о кэше */}
+            {extract.cached && extract.generatedAt && (
+              <div className="flex items-center text-sm text-gray-500 ml-auto">
+                <Clock className="h-4 w-4 mr-1" />
+                Обновлено: {new Date(extract.generatedAt).toLocaleString('ru-RU')}
+              </div>
+            )}
           </div>
           
           {/* Документ выписки */}
@@ -213,7 +256,7 @@ export default function ExtractPage() {
                   <p className="font-semibold">{extract.patient.birthDate} ({extract.patient.age} лет)</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Период выписки</p>
+                  <p className="text-sm text-gray-500">Период лечения</p>
                   <p className="font-semibold">{extract.period.from} — {extract.period.to}</p>
                 </div>
                 <div>
@@ -335,7 +378,7 @@ function formatExtractAsText(extract: ExtractData): string {
 
 Пациент: ${extract.patient.fullName}
 Дата рождения: ${extract.patient.birthDate} (${extract.patient.age} лет)
-Период: ${extract.period.from} — ${extract.period.to}
+Период лечения: ${extract.period.from} — ${extract.period.to}
 
 ДИАГНОЗ
 ${extract.diagnosis.main}

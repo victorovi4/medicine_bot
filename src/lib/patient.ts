@@ -11,6 +11,9 @@ export interface PatientProfile {
   patronymic: string
   birthDate: string // YYYY-MM-DD
   
+  // Текущий период лечения
+  treatmentStartDate: string // YYYY-MM-DD — начало текущего периода лечения
+  
   // Диагнозы
   mainDiagnosis: string | null
   mainDiagnosisCode: string | null // МКБ-10, например C61
@@ -32,6 +35,9 @@ export const PATIENT: PatientProfile = {
   lastName: 'Иоффе',
   patronymic: 'Борисович',
   birthDate: '1947-03-15',
+  
+  // Текущий период лечения (начало)
+  treatmentStartDate: '2025-02-01',
   
   // Основной диагноз
   mainDiagnosis: 'Рак предстательной железы',
@@ -83,6 +89,24 @@ export function getAge(patient: PatientProfile = PATIENT): number {
  */
 export function getFormattedBirthDate(patient: PatientProfile = PATIENT): string {
   return new Date(patient.birthDate).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+/**
+ * Получить дату начала текущего периода лечения.
+ */
+export function getTreatmentStartDate(patient: PatientProfile = PATIENT): string {
+  return patient.treatmentStartDate
+}
+
+/**
+ * Получить форматированную дату начала лечения.
+ */
+export function getFormattedTreatmentStartDate(patient: PatientProfile = PATIENT): string {
+  return new Date(patient.treatmentStartDate).toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',

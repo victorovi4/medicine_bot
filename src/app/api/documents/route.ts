@@ -2,6 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
 
+/**
+ * Триггер фоновой регенерации выписки.
+ * Не блокирует основной запрос.
+ */
+async function triggerExtractRegeneration(): Promise<void> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    // Fire and forget — не ждём ответа
+    fetch(`${baseUrl}/api/extract`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ forceRegenerate: true }),
+    }).catch(() => {
+      // Игнорируем ошибки — это фоновая задача
+    })
+  } catch {
+    // Игнорируем
+  }
+}
+
 // GET — получить все документы
 export async function GET(request: NextRequest) {
   try {
@@ -42,6 +62,9 @@ export async function POST(request: NextRequest) {
         keyValues: body.keyValues || null,
       },
     })
+    
+    // Запускаем регенерацию выписки в фоне (не блокируем ответ)
+    triggerExtractRegeneration()
     
     return NextResponse.json(document, { status: 201 })
   } catch (error) {

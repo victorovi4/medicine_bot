@@ -74,3 +74,21 @@ model PendingDocument {
   
   @@index([chatId])
 }
+
+// Кэш выписки 027/у
+model CachedExtract {
+  id              String   @id @default(uuid())
+  
+  // Период выписки
+  periodFrom      DateTime
+  periodTo        DateTime
+  
+  // Контент выписки (JSON)
+  content         Json     // ExtractData объект
+  
+  // Метаданные
+  documentsCount  Int      // Сколько документов было в выписке
+  generatedAt     DateTime @default(now())
+  
+  @@unique([periodFrom]) // Одна выписка на период лечения
+}

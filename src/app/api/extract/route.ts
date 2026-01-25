@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
-import { PATIENT, getFullName, getAge, getFormattedBirthDate } from '@/lib/patient'
+import { PATIENT, getFullName, getAge, getFormattedBirthDate, getTreatmentStartDate } from '@/lib/patient'
 import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -55,6 +55,7 @@ export interface ExtractData {
   recommendations: string
   documentsCount: number
   generatedAt: string
+  cached?: boolean
 }
 
 const EXTRACT_PROMPT = `Ты — опытный врач, составляющий выписку из истории болезни по форме 027/у.
@@ -116,25 +117,98 @@ const EXTRACT_PROMPT = `Ты — опытный врач, составляющи
   "recommendations": "..."
 }`
 
+/**
+ * GET /api/extract - получить кэшированную выписку за период лечения.
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
+    
+    // Период: от начала лечения до сегодня
+    const fromDate = getTreatmentStartDate()
+    const periodFrom = new Date(fromDate)
+    
+    // Проверяем кэш
+    const cached = await prisma.cachedExtract.findFirst({
+      where: { periodFrom },
+      orderBy: { generatedAt: 'desc' },
+    })
+    
+    if (cached) {
+      const extractData = cached.content as unknown as ExtractData
+      return NextResponse.json({
+        ...extractData,
+        cached: true,
+        generatedAt: cached.generatedAt.toISOString(),
+      })
+    }
+    
+    // Кэша нет — возвращаем информацию что нужно сгенерировать
+    return NextResponse.json({
+      needsGeneration: true,
+      treatmentStartDate: fromDate,
+      message: 'Выписка ещё не сгенерирована. Нажмите кнопку для генерации.',
+    })
+    
+  } catch (error) {
+    console.error('Get cached extract error:', error)
+    const message = error instanceof Error ? error.message : 'Ошибка'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+/**
+ * POST /api/extract - сгенерировать новую выписку.
+ * Body: { fromDate?, toDate?, forceRegenerate? }
+ * Если не указаны даты — используется период лечения.
+ */
 export async function POST(request: NextRequest) {
   try {
     const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
-    const body = await request.json()
-    const { fromDate, toDate } = body
+    const body = await request.json().catch(() => ({}))
     
-    if (!fromDate || !toDate) {
-      return NextResponse.json(
-        { error: 'fromDate и toDate обязательны' },
-        { status: 400 }
-      )
+    // По умолчанию: период лечения
+    const fromDate = body.fromDate || getTreatmentStartDate()
+    const toDate = body.toDate || new Date().toISOString().split('T')[0]
+    const forceRegenerate = body.forceRegenerate || false
+    
+    const periodFrom = new Date(fromDate)
+    const periodTo = new Date(toDate)
+    
+    // Проверяем кэш (если не форсируем регенерацию)
+    if (!forceRegenerate) {
+      const cached = await prisma.cachedExtract.findFirst({
+        where: { periodFrom },
+        orderBy: { generatedAt: 'desc' },
+      })
+      
+      if (cached) {
+        // Проверяем, есть ли новые документы после генерации
+        const newDocsCount = await prisma.document.count({
+          where: {
+            date: { gte: periodFrom, lte: periodTo },
+            createdAt: { gt: cached.generatedAt },
+          },
+        })
+        
+        if (newDocsCount === 0) {
+          // Кэш актуален
+          const extractData = cached.content as unknown as ExtractData
+          return NextResponse.json({
+            ...extractData,
+            cached: true,
+            generatedAt: cached.generatedAt.toISOString(),
+          })
+        }
+      }
     }
     
     // Получаем документы за период
     const documents = await prisma.document.findMany({
       where: {
         date: {
-          gte: new Date(fromDate),
-          lte: new Date(toDate),
+          gte: periodFrom,
+          lte: periodTo,
         },
       },
       orderBy: { date: 'asc' },
@@ -160,12 +234,10 @@ export async function POST(request: NextRequest) {
       if (doc.clinic) text += ` | ${doc.clinic}`
       text += '\n'
       
-      // Заключение врача (дословное)
       if (doc.conclusion) {
         text += `\n**Заключение врача:**\n${doc.conclusion}\n`
       }
       
-      // Рекомендации
       if (doc.recommendations && doc.recommendations.length > 0) {
         text += `\n**Рекомендации:**\n`
         doc.recommendations.forEach((rec, i) => {
@@ -173,13 +245,9 @@ export async function POST(request: NextRequest) {
         })
       }
       
-      // AI-резюме
       if (doc.summary) text += `\nРезюме: ${doc.summary}\n`
-      
-      // Полный текст (если есть)
       if (doc.content) text += `\nСодержание: ${doc.content}\n`
       
-      // Ключевые показатели
       if (doc.keyValues && typeof doc.keyValues === 'object') {
         const kv = doc.keyValues as Record<string, string>
         if (Object.keys(kv).length > 0) {
@@ -187,7 +255,6 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      // Теги
       if (doc.tags && doc.tags.length > 0) {
         text += `Теги: ${doc.tags.join(', ')}\n`
       }
@@ -215,7 +282,6 @@ export async function POST(request: NextRequest) {
     // Парсим JSON
     let extractContent
     try {
-      // Убираем возможные markdown-обёртки
       let jsonStr = textContent.trim()
       if (jsonStr.startsWith('```json')) {
         jsonStr = jsonStr.slice(7)
@@ -229,7 +295,6 @@ export async function POST(request: NextRequest) {
       
       extractContent = JSON.parse(jsonStr)
     } catch {
-      // Попытка найти JSON в тексте
       const jsonMatch = textContent.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
         extractContent = JSON.parse(jsonMatch[0])
@@ -239,6 +304,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Формируем полный ответ
+    const now = new Date()
     const extractData: ExtractData = {
       patient: {
         fullName: getFullName(),
@@ -248,8 +314,8 @@ export async function POST(request: NextRequest) {
         occupation: 'Пенсионер',
       },
       period: {
-        from: new Date(fromDate).toLocaleDateString('ru-RU'),
-        to: new Date(toDate).toLocaleDateString('ru-RU'),
+        from: periodFrom.toLocaleDateString('ru-RU'),
+        to: periodTo.toLocaleDateString('ru-RU'),
       },
       diagnosis: extractContent.diagnosis || { main: 'Не указан', secondary: [] },
       anamnesis: extractContent.anamnesis || 'Данные отсутствуют',
@@ -259,8 +325,26 @@ export async function POST(request: NextRequest) {
       currentState: extractContent.currentState || 'Данные отсутствуют',
       recommendations: extractContent.recommendations || 'Данные отсутствуют',
       documentsCount: documents.length,
-      generatedAt: new Date().toISOString(),
+      generatedAt: now.toISOString(),
     }
+    
+    // Сохраняем в кэш (upsert по periodFrom)
+    await prisma.cachedExtract.upsert({
+      where: { periodFrom },
+      update: {
+        periodTo,
+        content: extractData as object,
+        documentsCount: documents.length,
+        generatedAt: now,
+      },
+      create: {
+        periodFrom,
+        periodTo,
+        content: extractData as object,
+        documentsCount: documents.length,
+        generatedAt: now,
+      },
+    })
     
     return NextResponse.json(extractData)
     

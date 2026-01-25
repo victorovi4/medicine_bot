@@ -1,6 +1,8 @@
-import { PATIENT, getFullName, getAge, getFormattedBirthDate } from '@/lib/patient'
+import Link from 'next/link'
+import { PATIENT, getFullName, getAge, getFormattedBirthDate, getFormattedTreatmentStartDate } from '@/lib/patient'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { FileText } from 'lucide-react'
 
 export function PatientHeader() {
   const hasComorbidities = PATIENT.comorbidities.length > 0
@@ -49,6 +51,20 @@ export function PatientHeader() {
           {/* Правая колонка */}
           <div className="text-right space-y-2">
             <p className="text-sm font-medium text-blue-800">Медицинская карта</p>
+            
+            {/* Ссылка на выписку */}
+            <Link 
+              href="/extract" 
+              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              <FileText className="h-4 w-4" />
+              <span>Резюме (027/у)</span>
+            </Link>
+            
+            {/* Период лечения */}
+            <p className="text-xs text-gray-500">
+              Лечение с {getFormattedTreatmentStartDate()}
+            </p>
             
             {/* Отслеживаемые показатели */}
             {PATIENT.trackingMetrics.length > 0 && (
