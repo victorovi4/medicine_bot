@@ -311,10 +311,11 @@ https://api.telegram.org/bot<TOKEN>/getWebhookInfo
 **Реализация:**
 - [x] Таблица Measurement + миграция
 - [x] Справочник metrics.ts
-- [x] Парсинг при импорте
+- [x] Парсинг при импорте (веб + Telegram)
 - [x] API /api/metrics
-- [x] Графики в выписке
-- [ ] Ретроактивный парсинг (POST /api/metrics)
+- [x] Графики в выписке 027/у
+- [x] Ретроактивный парсинг (POST /api/metrics?force=true)
+- [x] Отдельная страница /metrics
 
 ---
 
