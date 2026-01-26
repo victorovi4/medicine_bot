@@ -5,6 +5,7 @@ import { prisma } from '@/lib/db'
 import { analyzeDocument, analyzeMultipleImages, AnalysisResult } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import { extractMeasurements } from '@/lib/metrics'
+import { findDuplicate } from '@/lib/duplicates'
 import {
   TelegramUpdate,
   sendMessage,
@@ -507,11 +508,11 @@ async function checkDuplicatesAndSave(
   )
   const docDate = analysis.date ? new Date(analysis.date) : new Date()
 
-  // Ищем похожие документы (та же дата ±3 дня и тот же подтип)
+  // Ищем похожие документы (та же дата ±7 дней)
   const startDate = new Date(docDate)
-  startDate.setDate(startDate.getDate() - 3)
+  startDate.setDate(startDate.getDate() - 7)
   const endDate = new Date(docDate)
-  endDate.setDate(endDate.getDate() + 3)
+  endDate.setDate(endDate.getDate() + 7)
 
   const similar = await prisma.document.findMany({
     where: {
@@ -519,19 +520,31 @@ async function checkDuplicatesAndSave(
         gte: startDate,
         lte: endDate,
       },
-      subtype: subtype,
     },
     orderBy: { date: 'desc' },
-    take: 5,
+    take: 20,
   })
 
-  // Проверяем схожесть названий
-  const duplicate = similar.find((doc) => {
-    const titleWords = (analysis.title || '').toLowerCase().split(/\s+/)
-    const docWords = doc.title.toLowerCase().split(/\s+/)
-    const commonWords = titleWords.filter((w) => w.length > 3 && docWords.includes(w))
-    return commonWords.length >= 2 // Минимум 2 общих слова длиннее 3 символов
-  })
+  // Улучшенная проверка дубликатов: врач+дата, fuzzy заключение, keyValues
+  const duplicateResult = findDuplicate(
+    similar.map(doc => ({
+      id: doc.id,
+      date: doc.date,
+      title: doc.title,
+      doctor: doc.doctor,
+      conclusion: doc.conclusion,
+      keyValues: doc.keyValues as Record<string, string> | null,
+    })),
+    {
+      date: docDate.toISOString(),
+      title: analysis.title,
+      doctor: analysis.doctor,
+      conclusion: analysis.conclusion,
+      keyValues: analysis.keyValues,
+    }
+  )
+  const duplicate = duplicateResult?.document
+  const duplicateReason = duplicateResult?.reason
 
   // Подготавливаем данные документа
   const documentData = {
@@ -578,6 +591,7 @@ async function checkDuplicatesAndSave(
         `📋 Существующий: ${duplicate.title}\n` +
         `📅 ${dupDate}\n` +
         `🔗 ${dupUrl}\n\n` +
+        `🔍 Причина: ${duplicateReason || 'Схожее название'}\n\n` +
         `Что делать?`,
       {
         reply_markup: {
