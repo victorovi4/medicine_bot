@@ -20,6 +20,19 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
+ * Форматирует понятное имя файла для загрузок без оригинального имени.
+ * Вместо telegram-1769396799832.jpg будет "Загрузка 26.01.2026 13-45.jpg"
+ */
+function formatUploadFileName(date: Date): string {
+  const day = date.getDate().toString().padStart(2, '0')
+  const month = (date.getMonth() + 1).toString().padStart(2, '0')
+  const year = date.getFullYear()
+  const hours = date.getHours().toString().padStart(2, '0')
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  return `Загрузка ${day}.${month}.${year} ${hours}-${minutes}.jpg`
+}
+
+/**
  * Webhook endpoint для Telegram бота.
  */
 export async function POST(request: NextRequest) {
@@ -86,6 +99,7 @@ export async function POST(request: NextRequest) {
           `2. Отправляйте фото по одному\n` +
           `3. Нажмите "✅ Готово"\n\n` +
           `📋 Выписка — генерация выписки 027/у за последний год.\n\n` +
+          `💡 Совет: чтобы сохранить имя файла, отправляйте его как "Файл" (📎 → Файл), а не как "Фото".\n\n` +
           `Команды: /status, /last, /extract, /cancel`
       )
       return NextResponse.json({ ok: true })
@@ -560,7 +574,8 @@ async function checkDuplicatesAndSave(
     recommendations: analysis.recommendations || [],
     content: caption || (pageCount > 1 ? `Документ из ${pageCount} страниц` : null),
     fileUrl,
-    fileName: fileName || `telegram-${Date.now()}.jpg`,
+    // Если нет оригинального имени (фото), создаём понятное имя с датой/временем
+    fileName: fileName || formatUploadFileName(new Date()),
     fileType: fileType || 'image/jpeg',
     tags: analysis.tags || [],
     keyValues: analysis.keyValues || null,
