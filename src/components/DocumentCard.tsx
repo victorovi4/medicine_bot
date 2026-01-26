@@ -16,6 +16,7 @@ interface DocumentCardProps {
   summary?: string | null
   tags?: string[]
   fileUrl?: string | null
+  fileName?: string | null
 }
 
 export function DocumentCard({
@@ -30,12 +31,19 @@ export function DocumentCard({
   summary,
   tags,
   fileUrl,
+  fileName,
 }: DocumentCardProps) {
-  const formattedDate = new Date(date).toLocaleDateString('ru-RU', {
+  const docDate = new Date(date)
+  const formattedDate = docDate.toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   })
+  
+  // Проверяем, является ли дата "сегодня" (возможно, не распознана)
+  const today = new Date()
+  const isToday = docDate.toDateString() === today.toDateString()
+  const needsDateCheck = isToday
   
   // Цвета для категорий
   const categoryColors: Record<string, string> = {
@@ -57,9 +65,10 @@ export function DocumentCard({
               <Badge variant="outline">{getSubtypeLabel(subtype)}</Badge>
               {fileUrl && <FileText className="h-4 w-4 text-gray-400" />}
             </div>
-            <div className="flex items-center gap-1 text-sm text-gray-500">
+            <div className={`flex items-center gap-1 text-sm ${needsDateCheck ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>
               <Calendar className="h-4 w-4" />
               {formattedDate}
+              {needsDateCheck && <span className="text-xs">(проверить!)</span>}
             </div>
           </div>
           <CardTitle className="text-lg mt-2">{title}</CardTitle>
@@ -85,6 +94,12 @@ export function DocumentCard({
             )}
             {summary && (
               <p className="text-sm text-gray-700 mt-2 line-clamp-2">{summary}</p>
+            )}
+            {fileName && (
+              <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
+                <FileText className="h-3 w-3" />
+                <span className="truncate">{fileName}</span>
+              </div>
             )}
             {tags && tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-2">

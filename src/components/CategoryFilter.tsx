@@ -13,6 +13,7 @@ interface Document {
   title: string
   doctor: string | null
   summary: string | null
+  fileName?: string | null
 }
 
 interface CategoryFilterProps {
@@ -74,6 +75,7 @@ export function CategoryFilter({ documents }: CategoryFilterProps) {
               title={doc.title}
               doctor={doc.doctor}
               summary={doc.summary}
+              fileName={doc.fileName}
             />
           ))}
         </div>

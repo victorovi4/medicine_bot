@@ -21,6 +21,7 @@ export default async function HomePage() {
       title: true,
       doctor: true,
       summary: true,
+      fileName: true,
     },
   })
   
