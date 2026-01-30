@@ -234,3 +234,61 @@ export function isUserAllowed(userId: number): boolean {
   const allowedIds = allowedUsers.split(',').map((id) => parseInt(id.trim(), 10))
   return allowedIds.includes(userId)
 }
+
+// ============================================
+// КЛАВИАТУРЫ
+// ============================================
+
+/**
+ * Основная клавиатура бота.
+ */
+export const MAIN_KEYBOARD: ReplyKeyboardMarkup = {
+  keyboard: [
+    [{ text: '📎 Много фото' }, { text: '📋 Дневник' }],
+    [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
+  ],
+  resize_keyboard: true,
+}
+
+/**
+ * Клавиатура дневника.
+ */
+export const DIARY_KEYBOARD: ReplyKeyboardMarkup = {
+  keyboard: [
+    [{ text: '🩺 Симптом' }, { text: '🌡 Показатели' }],
+    [{ text: '💊 Лекарства' }, { text: '◀️ Назад' }],
+  ],
+  resize_keyboard: true,
+}
+
+/**
+ * Клавиатура режима batch.
+ */
+export const BATCH_KEYBOARD: ReplyKeyboardMarkup = {
+  keyboard: [[{ text: '✅ Готово' }, { text: '❌ Отмена' }]],
+  resize_keyboard: true,
+}
+
+/**
+ * Клавиатура выбора показателя.
+ */
+export const VITALS_KEYBOARD: ReplyKeyboardMarkup = {
+  keyboard: [
+    [{ text: '🌡 Температура' }, { text: '💓 Давление' }],
+    [{ text: '❤️ Пульс' }, { text: '🫁 Сатурация' }],
+    [{ text: '◀️ Назад' }],
+  ],
+  resize_keyboard: true,
+}
+
+/**
+ * Клавиатура подтверждения интенсивности симптома.
+ */
+export const INTENSITY_KEYBOARD: ReplyKeyboardMarkup = {
+  keyboard: [
+    [{ text: '1' }, { text: '2' }, { text: '3' }, { text: '4' }, { text: '5' }],
+    [{ text: '6' }, { text: '7' }, { text: '8' }, { text: '9' }, { text: '10' }],
+    [{ text: '⏭ Пропустить' }],
+  ],
+  resize_keyboard: true,
+}

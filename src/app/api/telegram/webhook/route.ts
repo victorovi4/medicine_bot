@@ -14,7 +14,18 @@ import {
   getFile,
   downloadFile,
   isUserAllowed,
+  MAIN_KEYBOARD,
+  DIARY_KEYBOARD,
+  BATCH_KEYBOARD,
+  VITALS_KEYBOARD,
+  INTENSITY_KEYBOARD,
 } from '@/lib/telegram'
+import {
+  VITAL_SIGNS_CONFIG,
+  COMMON_SYMPTOMS,
+  parseVitalSignInput,
+  formatVitalSign,
+} from '@/lib/diary'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -71,20 +82,11 @@ export async function POST(request: NextRequest) {
       await sendMessage(
         chatId,
         `👋 Привет, ${userName}!\n\n` +
-          `Я помогаю добавлять документы в медицинскую карту.\n\n` +
-          `📄 Просто отправьте фото или PDF документа.\n\n` +
-          `📎 Если документ на нескольких фото — нажмите кнопку "📎 Много фото" внизу.\n\n` +
-          `📋 Для генерации выписки 027/у нажмите "📋 Выписка"\n\n` +
+          `Я помогаю вести медицинскую карту.\n\n` +
+          `📄 Отправьте фото или PDF — документ добавится в карту.\n\n` +
+          `📋 Дневник — запись симптомов, показателей, лекарств.\n\n` +
           `🔗 Карта: ${process.env.NEXT_PUBLIC_APP_URL}`,
-        {
-          reply_markup: {
-            keyboard: [
-              [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-              [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-            ],
-            resize_keyboard: true,
-          },
-        }
+        { reply_markup: MAIN_KEYBOARD }
       )
       return NextResponse.json({ ok: true })
     }
@@ -232,6 +234,177 @@ export async function POST(request: NextRequest) {
 
     if (message.text === '/extract' || message.text === '📋 Выписка') {
       await generateExtract(chatId)
+      return NextResponse.json({ ok: true })
+    }
+
+    // === ДНЕВНИК ===
+
+    if (message.text === '📋 Дневник') {
+      await sendMessage(
+        chatId,
+        `📋 Дневник пациента\n\n` +
+          `🩺 Симптом — записать что беспокоит\n` +
+          `🌡 Показатели — температура, давление, пульс\n` +
+          `💊 Лекарства — список препаратов`,
+        { reply_markup: DIARY_KEYBOARD }
+      )
+      return NextResponse.json({ ok: true })
+    }
+
+    if (message.text === '◀️ Назад') {
+      await sendMessage(chatId, '👌 Главное меню', { reply_markup: MAIN_KEYBOARD })
+      return NextResponse.json({ ok: true })
+    }
+
+    // --- Симптомы ---
+    if (message.text === '🩺 Симптом') {
+      // Показываем популярные симптомы как inline кнопки
+      const inlineButtons = COMMON_SYMPTOMS.slice(0, 12).map(s => [{ text: s, callback_data: `symptom:${s}` }])
+      await sendMessage(
+        chatId,
+        `🩺 Выберите симптом или напишите свой:\n\n` +
+          `Например: "головная боль" или "тошнота"`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              ...inlineButtons.slice(0, 4),
+              [{ text: '✏️ Написать свой', callback_data: 'symptom:custom' }],
+            ],
+          },
+        }
+      )
+      return NextResponse.json({ ok: true })
+    }
+
+    // --- Показатели ---
+    if (message.text === '🌡 Показатели') {
+      await sendMessage(
+        chatId,
+        `🌡 Выберите показатель для записи:`,
+        { reply_markup: VITALS_KEYBOARD }
+      )
+      return NextResponse.json({ ok: true })
+    }
+
+    // Ввод конкретного показателя
+    if (message.text === '🌡 Температура') {
+      await setUserState(chatId, 'awaiting_vital:temperature')
+      await sendMessage(chatId, '🌡 Введите температуру (например: 37.2):')
+      return NextResponse.json({ ok: true })
+    }
+
+    if (message.text === '💓 Давление') {
+      await setUserState(chatId, 'awaiting_vital:pressure')
+      await sendMessage(chatId, '💓 Введите давление (например: 120/80):')
+      return NextResponse.json({ ok: true })
+    }
+
+    if (message.text === '❤️ Пульс') {
+      await setUserState(chatId, 'awaiting_vital:pulse')
+      await sendMessage(chatId, '❤️ Введите пульс (например: 72):')
+      return NextResponse.json({ ok: true })
+    }
+
+    if (message.text === '🫁 Сатурация') {
+      await setUserState(chatId, 'awaiting_vital:spo2')
+      await sendMessage(chatId, '🫁 Введите сатурацию (например: 98):')
+      return NextResponse.json({ ok: true })
+    }
+
+    // --- Лекарства ---
+    if (message.text === '💊 Лекарства') {
+      await showMedications(chatId)
+      return NextResponse.json({ ok: true })
+    }
+
+    // Команда добавления лекарства: /med Название, дозировка, частота
+    if (message.text?.startsWith('/med ')) {
+      const parts = message.text.slice(5).split(',').map(s => s.trim())
+      const name = parts[0]
+      const dosage = parts[1] || null
+      const frequency = parts[2] || null
+      
+      if (!name) {
+        await sendMessage(chatId, '❌ Укажите название препарата.')
+        return NextResponse.json({ ok: true })
+      }
+      
+      await prisma.medication.create({
+        data: {
+          name,
+          dosage,
+          frequency,
+          startDate: new Date(),
+          isActive: true,
+        },
+      })
+      
+      await sendMessage(
+        chatId,
+        `✅ Препарат добавлен:\n\n💊 *${name}*` +
+          (dosage ? `\n📋 Дозировка: ${dosage}` : '') +
+          (frequency ? `\n🕐 Частота: ${frequency}` : ''),
+        {
+          parse_mode: 'Markdown',
+          reply_markup: DIARY_KEYBOARD,
+        }
+      )
+      return NextResponse.json({ ok: true })
+    }
+
+    // === ПРОВЕРКА СОСТОЯНИЯ ОЖИДАНИЯ ВВОДА ===
+    const userState = await getUserState(chatId)
+    
+    if (userState?.startsWith('awaiting_vital:')) {
+      const vitalType = userState.split(':')[1]
+      const parsed = parseVitalSignInput(message.text || '', vitalType)
+      
+      if (!parsed) {
+        await sendMessage(chatId, '❌ Не удалось распознать значение. Попробуйте ещё раз.')
+        return NextResponse.json({ ok: true })
+      }
+      
+      // Сохраняем показатель
+      const config = VITAL_SIGNS_CONFIG.find(v => v.type === vitalType)
+      await prisma.vitalSign.create({
+        data: {
+          datetime: new Date(),
+          type: vitalType,
+          value: parsed.value,
+          value2: parsed.value2 || null,
+          unit: config?.unit || '',
+        },
+      })
+      
+      await clearUserState(chatId)
+      
+      const formatted = formatVitalSign(vitalType, parsed.value, parsed.value2)
+      await sendMessage(
+        chatId,
+        `✅ ${config?.icon || ''} ${config?.name || vitalType}: ${formatted}\n\nЗаписано!`,
+        { reply_markup: DIARY_KEYBOARD }
+      )
+      return NextResponse.json({ ok: true })
+    }
+
+    if (userState?.startsWith('awaiting_symptom:')) {
+      // Сохраняем симптом
+      const symptomName = message.text || 'Неизвестный симптом'
+      
+      await prisma.symptom.create({
+        data: {
+          datetime: new Date(),
+          name: symptomName,
+        },
+      })
+      
+      await clearUserState(chatId)
+      
+      await sendMessage(
+        chatId,
+        `✅ Симптом "${symptomName}" записан!`,
+        { reply_markup: DIARY_KEYBOARD }
+      )
       return NextResponse.json({ ok: true })
     }
 
@@ -689,9 +862,33 @@ async function handleCallbackQuery(
     return
   }
 
-  const [action, pendingId] = callback.data.split(':')
   const chatId = callback.message.chat.id
   const messageId = callback.message.message_id
+
+  // === ОБРАБОТКА СИМПТОМОВ ===
+  if (callback.data.startsWith('symptom:')) {
+    const symptomName = callback.data.replace('symptom:', '')
+    
+    if (symptomName === 'custom') {
+      // Пользователь хочет ввести свой симптом
+      await setUserState(chatId, 'awaiting_symptom:custom')
+      await sendMessage(chatId, '✏️ Напишите, что вас беспокоит:', { reply_markup: DIARY_KEYBOARD })
+    } else {
+      // Записываем выбранный симптом
+      await prisma.symptom.create({
+        data: {
+          datetime: new Date(),
+          name: symptomName,
+        },
+      })
+      
+      await editMessage(chatId, messageId, `✅ Симптом "${symptomName}" записан!`)
+    }
+    return
+  }
+
+  // === ОБРАБОТКА ДУБЛИКАТОВ ===
+  const [action, pendingId] = callback.data.split(':')
 
   console.log('Processing action:', action, 'pendingId:', pendingId)
 
@@ -1058,4 +1255,95 @@ async function generateExtract(chatId: number): Promise<void> {
       }
     )
   }
+}
+
+// ============================================
+// СОСТОЯНИЕ ПОЛЬЗОВАТЕЛЯ (для ввода данных)
+// ============================================
+
+// Используем BatchPending с особым маркером для хранения состояния
+const STATE_PREFIX = '__state__:'
+
+async function setUserState(chatId: number, state: string): Promise<void> {
+  // Удаляем старое состояние
+  await prisma.batchPending.deleteMany({
+    where: {
+      chatId: BigInt(chatId),
+      fileUrl: { startsWith: STATE_PREFIX },
+    },
+  })
+  
+  // Создаём новое
+  await prisma.batchPending.create({
+    data: {
+      chatId: BigInt(chatId),
+      fileUrl: `${STATE_PREFIX}${state}`,
+      fileType: 'state',
+    },
+  })
+}
+
+async function getUserState(chatId: number): Promise<string | null> {
+  const record = await prisma.batchPending.findFirst({
+    where: {
+      chatId: BigInt(chatId),
+      fileUrl: { startsWith: STATE_PREFIX },
+    },
+  })
+  
+  if (!record) return null
+  return record.fileUrl.replace(STATE_PREFIX, '')
+}
+
+async function clearUserState(chatId: number): Promise<void> {
+  await prisma.batchPending.deleteMany({
+    where: {
+      chatId: BigInt(chatId),
+      fileUrl: { startsWith: STATE_PREFIX },
+    },
+  })
+}
+
+// ============================================
+// ЛЕКАРСТВА
+// ============================================
+
+async function showMedications(chatId: number): Promise<void> {
+  const medications = await prisma.medication.findMany({
+    where: { isActive: true },
+    orderBy: { startDate: 'desc' },
+  })
+  
+  if (medications.length === 0) {
+    await sendMessage(
+      chatId,
+      `💊 Список препаратов пуст.\n\n` +
+        `Чтобы добавить препарат, напишите:\n` +
+        `\`/med Название, дозировка, сколько раз в день\`\n\n` +
+        `Например:\n` +
+        `\`/med Преднизолон, 5 мг, 2 раза в день\``,
+      { 
+        parse_mode: 'Markdown',
+        reply_markup: DIARY_KEYBOARD,
+      }
+    )
+    return
+  }
+  
+  let text = `💊 Текущие препараты:\n\n`
+  
+  for (const med of medications) {
+    const startDate = new Date(med.startDate).toLocaleDateString('ru-RU')
+    text += `• *${med.name}*`
+    if (med.dosage) text += ` — ${med.dosage}`
+    if (med.frequency) text += `, ${med.frequency}`
+    text += `\n  (с ${startDate})\n`
+  }
+  
+  text += `\n➕ Добавить: \`/med Название, дозировка, частота\``
+  
+  await sendMessage(chatId, text, {
+    parse_mode: 'Markdown',
+    reply_markup: DIARY_KEYBOARD,
+  })
 }

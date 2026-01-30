@@ -115,3 +115,56 @@ model CachedExtract {
   
   @@unique([periodFrom]) // Одна выписка на период лечения
 }
+
+// ============================================
+// ДНЕВНИК ПАЦИЕНТА
+// ============================================
+
+// Запись симптома
+model Symptom {
+  id          String   @id @default(uuid())
+  datetime    DateTime // Дата + время появления симптома
+  name        String   // "Головная боль", "Тошнота", "Слабость"
+  intensity   Int?     // Интенсивность 1-10 (опционально)
+  duration    String?  // "2 часа", "весь день"
+  notes       String?  @db.Text // Комментарий
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([datetime])
+  @@index([name])
+}
+
+// Показатель здоровья (температура, давление, пульс)
+model VitalSign {
+  id          String   @id @default(uuid())
+  datetime    DateTime // Дата + время измерения
+  type        String   // "temperature", "pressure", "pulse", "weight", "spo2"
+  value       Float    // Основное значение (36.6, 120, 72)
+  value2      Float?   // Второе значение (для давления: 80)
+  unit        String   // "°C", "мм рт.ст.", "уд/мин", "кг", "%"
+  notes       String?  // Комментарий
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([datetime])
+  @@index([type])
+}
+
+// Препарат, который принимает пациент
+model Medication {
+  id          String   @id @default(uuid())
+  name        String   // "Преднизолон", "Энтеросгель"
+  dosage      String?  // "5 мг", "1 таблетка"
+  frequency   String?  // "2 раза в день", "утром и вечером"
+  startDate   DateTime // Когда начал принимать
+  endDate     DateTime? // Когда закончил (null = продолжает)
+  notes       String?  @db.Text
+  isActive    Boolean  @default(true) // Активный препарат
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([isActive])
+  @@index([startDate])
+}
