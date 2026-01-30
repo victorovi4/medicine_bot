@@ -209,15 +209,7 @@ export async function POST(request: NextRequest) {
         await sendMessage(
           chatId,
           `❌ Сбор отменён.${pageCount > 0 ? ` Удалено ${pageCount} страниц.` : ''}`,
-          {
-            reply_markup: {
-            keyboard: [
-              [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-              [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-            ],
-            resize_keyboard: true,
-          },
-        }
+          { reply_markup: MAIN_KEYBOARD }
       )
     } else {
       await sendMessage(chatId, `ℹ️ Нет активного сбора страниц.`)
@@ -928,15 +920,7 @@ async function handleCallbackQuery(
     await prisma.pendingDocument.delete({ where: { id: pendingId } })
     await editMessage(chatId, messageId, '❌ Добавление отменено.')
     // Отправляем сообщение с клавиатурой
-    await sendMessage(chatId, '📂 Готов к новым документам!', {
-      reply_markup: {
-        keyboard: [
-          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-        ],
-        resize_keyboard: true,
-      },
-    })
+    await sendMessage(chatId, '📂 Готов к новым документам!', { reply_markup: MAIN_KEYBOARD })
     return
   }
 
@@ -987,15 +971,7 @@ async function handleCallbackQuery(
         `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${document.id}`
     )
     // Отправляем сообщение с клавиатурой
-    await sendMessage(chatId, '📂 Готов к новым документам!', {
-      reply_markup: {
-        keyboard: [
-          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-        ],
-        resize_keyboard: true,
-      },
-    })
+    await sendMessage(chatId, '📂 Готов к новым документам!', { reply_markup: MAIN_KEYBOARD })
     return
   }
 
@@ -1058,15 +1034,7 @@ async function handleCallbackQuery(
     )
     
     // Отправляем сообщение с клавиатурой
-    await sendMessage(chatId, '📂 Готов к новым документам!', {
-      reply_markup: {
-        keyboard: [
-          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-        ],
-        resize_keyboard: true,
-      },
-    })
+    await sendMessage(chatId, '📂 Готов к новым документам!', { reply_markup: MAIN_KEYBOARD })
     console.log('Replace completed successfully')
     return
   }
@@ -1080,15 +1048,7 @@ async function handleCallbackQuery(
     }
     // Также отправляем новое сообщение, если edit не сработал
     try {
-      await sendMessage(chatId, `❌ Произошла ошибка при обработке. Попробуйте ещё раз.`, {
-        reply_markup: {
-          keyboard: [
-            [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-            [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-          ],
-          resize_keyboard: true,
-        },
-      })
+      await sendMessage(chatId, `❌ Произошла ошибка при обработке. Попробуйте ещё раз.`, { reply_markup: MAIN_KEYBOARD })
     } catch {
       // ignore
     }
@@ -1143,15 +1103,7 @@ async function sendSuccessMessage(
 
   response += `\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${documentId}`
 
-  await sendMessage(chatId, response, {
-    reply_markup: {
-      keyboard: [
-        [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-        [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-      ],
-      resize_keyboard: true,
-    },
-  })
+  await sendMessage(chatId, response, { reply_markup: MAIN_KEYBOARD })
 }
 
 function pluralize(n: number, one: string, few: string, many: string): string {
@@ -1230,13 +1182,7 @@ async function generateExtract(chatId: number): Promise<void> {
 
     await sendMessage(chatId, text, {
       parse_mode: 'Markdown',
-      reply_markup: {
-        keyboard: [
-          [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-          [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-        ],
-        resize_keyboard: true,
-      },
+      reply_markup: MAIN_KEYBOARD,
     })
   } catch (error) {
     console.error('Extract generation error:', error)
@@ -1244,15 +1190,7 @@ async function generateExtract(chatId: number): Promise<void> {
     await sendMessage(
       chatId,
       `❌ Ошибка генерации выписки: ${msg}\n\nПопробуйте на сайте: ${process.env.NEXT_PUBLIC_APP_URL}/extract`,
-      {
-        reply_markup: {
-          keyboard: [
-            [{ text: '📎 Много фото' }, { text: '📋 Выписка' }],
-            [{ text: '📊 Статистика' }, { text: '📋 Последние' }],
-          ],
-          resize_keyboard: true,
-        },
-      }
+      { reply_markup: MAIN_KEYBOARD }
     )
   }
 }
