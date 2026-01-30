@@ -15,6 +15,8 @@ export interface SearchableDocument {
   conclusion?: string | null
   tags: string[]
   keyValues?: Record<string, string> | null
+  fileUrl?: string | null
+  fileName?: string | null
 }
 
 export interface SearchResult {

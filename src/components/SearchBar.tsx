@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, X, FileText, CheckCircle, HelpCircle, Loader2 } from 'lucide-react'
+import { Search, X, FileText, CheckCircle, HelpCircle, Loader2, Download } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -15,6 +15,8 @@ interface SearchResultItem {
   title: string
   doctor: string | null
   specialty: string | null
+  fileUrl: string | null
+  fileName: string | null
   matchType: 'exact' | 'partial' | 'context'
   relevance: number
   highlights: { field: string; text: string }[]
@@ -28,9 +30,69 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Скачать все файлы как ZIP
+  const downloadAllFiles = useCallback(async () => {
+    if (!results) return
+    
+    const allResults = [...results.exact, ...results.partial, ...results.context]
+    const filesWithUrl = allResults.filter(r => r.fileUrl)
+    
+    if (filesWithUrl.length === 0) {
+      alert('Нет файлов для скачивания')
+      return
+    }
+    
+    setIsDownloading(true)
+    setDownloadProgress(`0/${filesWithUrl.length}`)
+    
+    try {
+      // Динамический импорт для клиентской стороны
+      const JSZip = (await import('jszip')).default
+      const { saveAs } = await import('file-saver')
+      
+      const zip = new JSZip()
+      let downloaded = 0
+      
+      for (const item of filesWithUrl) {
+        if (!item.fileUrl) continue
+        
+        try {
+          const response = await fetch(item.fileUrl)
+          const blob = await response.blob()
+          
+          // Формируем имя файла
+          const date = new Date(item.date).toLocaleDateString('ru-RU').replace(/\./g, '-')
+          const ext = item.fileName?.split('.').pop() || 'pdf'
+          const safeName = item.title.replace(/[/\\?%*:|"<>]/g, '-').slice(0, 50)
+          const fileName = `${date}_${safeName}.${ext}`
+          
+          zip.file(fileName, blob)
+          downloaded++
+          setDownloadProgress(`${downloaded}/${filesWithUrl.length}`)
+        } catch (err) {
+          console.error(`Failed to download: ${item.title}`, err)
+        }
+      }
+      
+      if (downloaded > 0) {
+        setDownloadProgress('Создание архива...')
+        const content = await zip.generateAsync({ type: 'blob' })
+        saveAs(content, `документы_${query}.zip`)
+      }
+    } catch (error) {
+      console.error('Download error:', error)
+      alert('Ошибка при скачивании файлов')
+    } finally {
+      setIsDownloading(false)
+      setDownloadProgress('')
+    }
+  }, [results, query])
 
   // Debounced search
   useEffect(() => {
@@ -241,9 +303,34 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
                 'text-orange-600'
               )}
 
-              {/* Summary */}
-              <div className="px-3 py-2 text-xs text-gray-500 bg-gray-50 border-t">
-                Найдено: {results.total} документ(ов)
+              {/* Summary + Download button */}
+              <div className="px-3 py-2 bg-gray-50 border-t flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-500">
+                  Найдено: {results.total} документ(ов)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    downloadAllFiles()
+                  }}
+                  disabled={isDownloading || ![...results.exact, ...results.partial, ...results.context].some(r => r.fileUrl)}
+                >
+                  {isDownloading ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      {downloadProgress}
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-3 w-3 mr-1" />
+                      Скачать все
+                    </>
+                  )}
+                </Button>
               </div>
             </>
           )}

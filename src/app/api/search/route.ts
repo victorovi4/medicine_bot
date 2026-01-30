@@ -20,6 +20,8 @@ interface SearchResultDTO {
   title: string
   doctor: string | null
   specialty: string | null
+  fileUrl: string | null
+  fileName: string | null
   matchType: 'exact' | 'partial' | 'context'
   relevance: number
   highlights: { field: string; text: string }[]
@@ -34,6 +36,8 @@ function toDTO(result: SearchResult): SearchResultDTO {
     title: result.document.title,
     doctor: result.document.doctor || null,
     specialty: result.document.specialty || null,
+    fileUrl: result.document.fileUrl || null,
+    fileName: result.document.fileName || null,
     matchType: result.matchType,
     relevance: result.relevance,
     highlights: result.highlights,
@@ -74,6 +78,8 @@ export async function GET(request: NextRequest) {
         conclusion: true,
         tags: true,
         keyValues: true,
+        fileUrl: true,
+        fileName: true,
       },
     })
     
