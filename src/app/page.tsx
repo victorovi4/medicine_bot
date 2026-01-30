@@ -29,25 +29,26 @@ export default async function HomePage() {
     <main className="container mx-auto px-4 py-8 max-w-4xl">
       <PatientHeader />
       
-      <div className="flex justify-between items-center mb-6">
+      {/* Заголовок и кнопки — адаптивно для мобильных */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
         <h2 className="text-xl font-semibold">История болезни</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link href="/metrics">
-            <Button variant="outline">
-              <Activity className="h-4 w-4 mr-2" />
-              Показатели
+            <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+              <Activity className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Показатели</span>
             </Button>
           </Link>
           <Link href="/extract">
-            <Button variant="outline">
-              <FileText className="h-4 w-4 mr-2" />
-              Выписка 027/у
+            <Button variant="outline" size="sm" className="text-xs sm:text-sm">
+              <FileText className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Выписка 027/у</span>
             </Button>
           </Link>
           <Link href="/add">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Добавить документ
+            <Button size="sm" className="text-xs sm:text-sm">
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Добавить</span>
             </Button>
           </Link>
         </div>
