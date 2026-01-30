@@ -36,7 +36,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Скачать все файлы как ZIP
+  // Скачать все файлы как ZIP через серверный API
   const downloadAllFiles = useCallback(async () => {
     if (!results) return
     
@@ -49,42 +49,34 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
     }
     
     setIsDownloading(true)
-    setDownloadProgress(`0/${filesWithUrl.length}`)
+    setDownloadProgress('Подготовка...')
     
     try {
-      // Динамический импорт для клиентской стороны
-      const JSZip = (await import('jszip')).default
-      const { saveAs } = await import('file-saver')
+      const ids = filesWithUrl.map(r => r.id)
       
-      const zip = new JSZip()
-      let downloaded = 0
+      const response = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
       
-      for (const item of filesWithUrl) {
-        if (!item.fileUrl) continue
-        
-        try {
-          const response = await fetch(item.fileUrl)
-          const blob = await response.blob()
-          
-          // Формируем имя файла
-          const date = new Date(item.date).toLocaleDateString('ru-RU').replace(/\./g, '-')
-          const ext = item.fileName?.split('.').pop() || 'pdf'
-          const safeName = item.title.replace(/[/\\?%*:|"<>]/g, '-').slice(0, 50)
-          const fileName = `${date}_${safeName}.${ext}`
-          
-          zip.file(fileName, blob)
-          downloaded++
-          setDownloadProgress(`${downloaded}/${filesWithUrl.length}`)
-        } catch (err) {
-          console.error(`Failed to download: ${item.title}`, err)
-        }
+      if (!response.ok) {
+        throw new Error('Download failed')
       }
       
-      if (downloaded > 0) {
-        setDownloadProgress('Создание архива...')
-        const content = await zip.generateAsync({ type: 'blob' })
-        saveAs(content, `документы_${query}.zip`)
-      }
+      setDownloadProgress('Скачивание...')
+      
+      const blob = await response.blob()
+      
+      // Скачиваем файл
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `документы_${query}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
     } catch (error) {
       console.error('Download error:', error)
       alert('Ошибка при скачивании файлов')
