@@ -39,12 +39,22 @@ interface MetricSummary {
   lastStatus: 'normal' | 'low' | 'high' | 'critical' | 'unknown'
 }
 
+interface ProcedureMarker {
+  date: string
+  type: string
+  name: string
+  beforeValue?: number
+  afterValue?: number
+  unit?: string
+}
+
 interface MetricsChartProps {
   metric: MetricSummary
   compact?: boolean
+  procedures?: ProcedureMarker[]
 }
 
-export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
+export function MetricsChart({ metric, compact = false, procedures = [] }: MetricsChartProps) {
   if (metric.dataPoints.length === 0) {
     return (
       <Card className={compact ? 'print:break-inside-avoid' : ''}>
@@ -66,6 +76,15 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
       month: '2-digit',
     }),
     fullDate: new Date(dp.date).toLocaleDateString('ru-RU'),
+  }))
+  
+  // Подготовка маркеров процедур
+  const procedureMarkers = procedures.map((p) => ({
+    ...p,
+    dateFormatted: new Date(p.date).toLocaleDateString('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+    }),
   }))
 
   // Определяем диапазон Y оси
@@ -148,6 +167,16 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
             {chartData[chartData.length - 1]?.fullDate}: {metric.lastValue} {metric.unit}
           </p>
         )}
+        {procedures.length > 0 && (
+          <p className="text-xs text-purple-600 mt-1">
+            💉 Гемотрансфузий: {procedures.length} 
+            {procedures.length === 1 && procedures[0].beforeValue && procedures[0].afterValue && (
+              <span className="ml-2">
+                ({procedures[0].beforeValue} → {procedures[0].afterValue} {procedures[0].unit})
+              </span>
+            )}
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
@@ -189,6 +218,22 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
                 label={{ value: 'Критично', position: 'right', fontSize: 10 }}
               />
             )}
+            
+            {/* Маркеры гемотрансфузий */}
+            {procedureMarkers.map((proc, idx) => (
+              <ReferenceLine
+                key={`proc-${idx}`}
+                x={proc.dateFormatted}
+                stroke="#9333ea"
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                label={{
+                  value: '💉',
+                  position: 'top',
+                  fontSize: 14,
+                }}
+              />
+            ))}
             
             <XAxis
               dataKey="dateFormatted"

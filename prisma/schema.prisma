@@ -38,6 +38,7 @@ model Document {
   
   // Связи
   measurements Measurement[]            // Извлечённые числовые показатели
+  procedures   Procedure[]              // Проведённые процедуры (гемотрансфузии, операции)
   
   // Мета
   createdAt DateTime @default(now())
@@ -114,6 +115,40 @@ model CachedExtract {
   generatedAt     DateTime @default(now())
   
   @@unique([periodFrom]) // Одна выписка на период лечения
+}
+
+// ============================================
+// ПРОЦЕДУРЫ И МАНИПУЛЯЦИИ
+// ============================================
+
+// Медицинская процедура (гемотрансфузия, операция, манипуляция)
+model Procedure {
+  id          String   @id @default(uuid())
+  
+  // Связь с документом-источником (опционально)
+  documentId  String?
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  
+  // Данные процедуры
+  date        DateTime  // Дата процедуры
+  type        String    // "hemotransfusion", "surgery", "manipulation", "puncture"
+  name        String    // "Гемотрансфузия эритроцитарной массы", "Лапароцентез"
+  
+  // Детали (зависят от типа)
+  details     Json?     // Для гемотрансфузии: {volume: "300 мл", bloodType: "A(II) Rh-", component: "эритроцитарная масса"}
+  
+  // Результат / показатели до и после
+  beforeValue Float?    // Например, гемоглобин до: 75
+  afterValue  Float?    // Гемоглобин после: 108
+  unit        String?   // "г/л"
+  
+  notes       String?   @db.Text
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([date])
+  @@index([type])
+  @@index([documentId])
 }
 
 // ============================================

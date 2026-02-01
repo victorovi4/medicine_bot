@@ -744,6 +744,9 @@ async function checkDuplicatesAndSave(
     fileType: fileType || 'image/jpeg',
     tags: analysis.tags || [],
     keyValues: analysis.keyValues || null,
+    // Новые поля для процедур и динамики
+    procedures: analysis.procedures || [],
+    measurementsDynamics: analysis.measurementsDynamics || [],
   }
 
   if (duplicate) {
@@ -800,6 +803,26 @@ async function checkDuplicatesAndSave(
     // Извлекаем измерения из keyValues
     const measurements = extractMeasurements(documentData.keyValues as Record<string, string> | null)
     
+    // Добавляем измерения из динамики (measurementsDynamics)
+    const dynamicMeasurements: { name: string; value: number; unit: string; date: Date }[] = []
+    if (documentData.measurementsDynamics && documentData.measurementsDynamics.length > 0) {
+      for (const metric of documentData.measurementsDynamics) {
+        for (const v of metric.values) {
+          dynamicMeasurements.push({
+            name: metric.name,
+            value: v.value,
+            unit: metric.unit,
+            date: new Date(v.date),
+          })
+        }
+      }
+    }
+    
+    // Объединяем: динамика имеет приоритет (больше данных)
+    const allMeasurements = dynamicMeasurements.length > 0 
+      ? dynamicMeasurements 
+      : measurements.map(m => ({ ...m, date: docDate }))
+    
     const document = await prisma.document.create({
       data: {
         date: docDate,
@@ -820,15 +843,33 @@ async function checkDuplicatesAndSave(
         keyValues: documentData.keyValues,
         // Создаём связанные измерения
         measurements: {
-          create: measurements.map(m => ({
+          create: allMeasurements.map(m => ({
             name: m.name,
             value: m.value,
             unit: m.unit,
-            date: docDate,
+            date: m.date,
           })),
         },
       },
     })
+
+    // Создаём процедуры, если есть
+    if (documentData.procedures && documentData.procedures.length > 0) {
+      for (const proc of documentData.procedures) {
+        await prisma.procedure.create({
+          data: {
+            documentId: document.id,
+            date: proc.date ? new Date(proc.date) : docDate,
+            type: proc.type,
+            name: proc.name,
+            details: proc.details || null,
+            beforeValue: proc.beforeValue ?? null,
+            afterValue: proc.afterValue ?? null,
+            unit: proc.unit || null,
+          },
+        })
+      }
+    }
 
     await sendSuccessMessage(chatId, analysis, document.id, pageCount)
   }

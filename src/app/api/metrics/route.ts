@@ -14,6 +14,15 @@ export interface MetricDataPoint {
   documentTitle: string
 }
 
+export interface ProcedureMarker {
+  date: string
+  type: string
+  name: string
+  beforeValue?: number
+  afterValue?: number
+  unit?: string
+}
+
 export interface MetricSummary {
   name: string
   unit: string
@@ -66,6 +75,27 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { date: 'asc' },
     })
+    
+    // Получаем процедуры (гемотрансфузии и др.) за период
+    const procedures = await prisma.procedure.findMany({
+      where: {
+        date: {
+          gte: periodFrom,
+          lte: periodTo,
+        },
+      },
+      orderBy: { date: 'asc' },
+    })
+    
+    // Маркеры процедур для графиков
+    const procedureMarkers: ProcedureMarker[] = procedures.map(p => ({
+      date: p.date.toISOString(),
+      type: p.type,
+      name: p.name,
+      beforeValue: p.beforeValue ?? undefined,
+      afterValue: p.afterValue ?? undefined,
+      unit: p.unit ?? undefined,
+    }))
     
     // Группируем по названию показателя
     const grouped: Record<string, MetricDataPoint[]> = {}
@@ -132,6 +162,7 @@ export async function GET(request: NextRequest) {
         to: toDate,
       },
       metrics,
+      procedures: procedureMarkers,
     })
     
   } catch (error) {

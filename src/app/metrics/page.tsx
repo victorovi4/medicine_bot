@@ -32,12 +32,22 @@ interface MetricSummary {
   lastStatus: 'normal' | 'low' | 'high' | 'critical' | 'unknown'
 }
 
+interface ProcedureMarker {
+  date: string
+  type: string
+  name: string
+  beforeValue?: number
+  afterValue?: number
+  unit?: string
+}
+
 interface MetricsResponse {
   period: {
     from: string
     to: string
   }
   metrics: MetricSummary[]
+  procedures: ProcedureMarker[]
 }
 
 function formatDate(dateStr: string): string {
@@ -211,13 +221,20 @@ export default function MetricsPage() {
         <div className="space-y-6">
           <h2 className="text-lg font-semibold">Графики динамики</h2>
           <div className="grid gap-6">
-            {metricsWithData.map(metric => (
-              <Card key={metric.name}>
-                <CardContent className="pt-6">
-                  <MetricsChart metric={metric} />
-                </CardContent>
-              </Card>
-            ))}
+            {metricsWithData.map(metric => {
+              // Для гемоглобина показываем маркеры гемотрансфузий
+              const hemotransfusions = metric.name === 'Гемоглобин' 
+                ? (data?.procedures || []).filter(p => p.type === 'hemotransfusion')
+                : []
+              
+              return (
+                <Card key={metric.name}>
+                  <CardContent className="pt-6">
+                    <MetricsChart metric={metric} procedures={hemotransfusions} />
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         </div>
       )}

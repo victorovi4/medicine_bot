@@ -8,7 +8,7 @@ import { DocumentActions } from '@/components/DocumentActions'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Calendar, User, Building, FileText, Download, Sparkles, ClipboardList, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Calendar, User, Building, FileText, Download, Sparkles, ClipboardList, CheckCircle2, Syringe } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +22,11 @@ export default async function DocumentPage({
   const prisma = getPrismaClient({ testMode })
   const document = await prisma.document.findUnique({
     where: { id },
+    include: {
+      procedures: {
+        orderBy: { date: 'asc' },
+      },
+    },
   })
   
   if (!document) {
@@ -123,6 +128,48 @@ export default async function DocumentPage({
                     <span>{rec}</span>
                   </li>
                 ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* Проведённые процедуры */}
+          {document.procedures && document.procedures.length > 0 && (
+            <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
+              <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+                <Syringe className="h-5 w-5" />
+                Проведённые процедуры
+              </h3>
+              <ul className="space-y-3">
+                {document.procedures.map((proc) => {
+                  const procDate = new Date(proc.date).toLocaleDateString('ru-RU')
+                  const details = proc.details as Record<string, string> | null
+                  
+                  return (
+                    <li key={proc.id} className="flex items-start gap-3 text-purple-800">
+                      <span className="bg-purple-200 text-purple-800 rounded-full w-6 h-6 flex items-center justify-center text-sm flex-shrink-0 mt-0.5">
+                        💉
+                      </span>
+                      <div>
+                        <p className="font-medium">{proc.name}</p>
+                        <p className="text-sm text-purple-600">
+                          {procDate}
+                          {proc.beforeValue !== null && proc.afterValue !== null && (
+                            <span className="ml-2">
+                              • {proc.beforeValue} → {proc.afterValue} {proc.unit}
+                            </span>
+                          )}
+                        </p>
+                        {details && (
+                          <p className="text-sm text-purple-600">
+                            {details.bloodType && `Группа: ${details.bloodType}`}
+                            {details.volume && ` • Объём: ${details.volume}`}
+                            {details.component && ` • ${details.component}`}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}
