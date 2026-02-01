@@ -757,7 +757,8 @@ async function checkDuplicatesAndSave(
     const pending = await prisma.pendingDocument.create({
       data: {
         chatId: BigInt(chatId),
-        documentData,
+        // Преобразуем в JSON-совместимый формат для Prisma
+        documentData: JSON.parse(JSON.stringify(documentData)),
         duplicateId: duplicate.id,
         expiresAt,
       },
