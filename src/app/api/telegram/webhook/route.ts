@@ -863,10 +863,10 @@ async function checkDuplicatesAndSave(
             date: proc.date ? new Date(proc.date) : docDate,
             type: proc.type,
             name: proc.name,
-            details: proc.details || null,
+            details: proc.details ? JSON.parse(JSON.stringify(proc.details)) : undefined,
             beforeValue: proc.beforeValue ?? null,
             afterValue: proc.afterValue ?? null,
-            unit: proc.unit || null,
+            unit: proc.unit ?? null,
           },
         })
       }
