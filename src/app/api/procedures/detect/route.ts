@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 import { analyzeDocumentsForHemotransfusions, DetectedHemotransfusion } from '@/lib/hemotransfusion-detector'
 
@@ -14,7 +15,7 @@ export async function GET() {
     // Получаем все документы с keyValues
     const documents = await prisma.document.findMany({
       where: {
-        keyValues: { not: null },
+        keyValues: { not: Prisma.JsonNull },
       },
       select: {
         id: true,
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
     // Получаем все документы с keyValues
     const documents = await prisma.document.findMany({
       where: {
-        keyValues: { not: null },
+        keyValues: { not: Prisma.JsonNull },
       },
       select: {
         id: true,
