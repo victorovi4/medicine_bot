@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  LineChart,
+  ComposedChart,
   Line,
   XAxis,
   YAxis,
@@ -10,10 +10,41 @@ import {
   ReferenceLine,
   ResponsiveContainer,
   ReferenceArea,
+  Scatter,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+
+// Кастомная точка для маркера гемотрансфузии
+interface CustomShapeProps {
+  cx?: number
+  cy?: number
+  payload?: { isProcedure?: boolean }
+}
+
+function ProcedureMarkerShape({ cx, cy }: CustomShapeProps) {
+  if (cx === undefined || cy === undefined) return null
+  
+  return (
+    <g>
+      {/* Вертикальная линия */}
+      <line
+        x1={cx}
+        y1={0}
+        x2={cx}
+        y2={500}
+        stroke="#9333ea"
+        strokeWidth={2}
+        strokeDasharray="4 2"
+      />
+      {/* Иконка сверху */}
+      <text x={cx} y={15} textAnchor="middle" fontSize={14}>
+        💉
+      </text>
+    </g>
+  )
+}
 
 interface DataPoint {
   date: string
@@ -68,7 +99,27 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
     )
   }
 
-  // Подготовка данных для графика
+  // Создаём Set дат процедур для быстрой проверки
+  const procedureDatesSet = new Set<string>()
+  procedures.forEach((p) => {
+    const procDate = new Date(p.date).getTime()
+    // Находим ближайшую точку данных
+    let closestDate = ''
+    let minDiff = Infinity
+    for (const dp of metric.dataPoints) {
+      const diff = Math.abs(new Date(dp.date).getTime() - procDate)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestDate = dp.date
+      }
+    }
+    // Добавляем если разница < 7 дней
+    if (minDiff < 7 * 24 * 60 * 60 * 1000) {
+      procedureDatesSet.add(closestDate)
+    }
+  })
+
+  // Подготовка данных для графика с пометкой процедур
   const chartData = metric.dataPoints.map((dp) => ({
     ...dp,
     dateFormatted: new Date(dp.date).toLocaleDateString('ru-RU', {
@@ -76,31 +127,10 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
       month: '2-digit',
     }),
     fullDate: new Date(dp.date).toLocaleDateString('ru-RU'),
+    isProcedure: procedureDatesSet.has(dp.date),
+    // Значение для scatter — показываем только если это процедура
+    procedureValue: procedureDatesSet.has(dp.date) ? dp.value : null,
   }))
-  
-  // Подготовка маркеров процедур — найти ближайшую точку данных
-  const procedureMarkers = chartData.length === 0 ? [] : procedures.map((p) => {
-    const procDate = new Date(p.date).getTime()
-    
-    // Находим ближайшую точку данных по дате
-    let closestPoint = chartData[0]
-    let minDiff = Math.abs(new Date(chartData[0].date).getTime() - procDate)
-    
-    for (const point of chartData) {
-      const diff = Math.abs(new Date(point.date).getTime() - procDate)
-      if (diff < minDiff) {
-        minDiff = diff
-        closestPoint = point
-      }
-    }
-    
-    return {
-      ...p,
-      dateFormatted: closestPoint.dateFormatted,
-      // Показывать только если разница меньше 7 дней
-      isVisible: minDiff < 7 * 24 * 60 * 60 * 1000,
-    }
-  }).filter(p => p.isVisible)
 
   // Определяем диапазон Y оси
   const allValues = metric.dataPoints.map((d) => d.value)
@@ -195,9 +225,9 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
-          <LineChart
+          <ComposedChart
             data={chartData}
-            margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+            margin={{ top: 20, right: 5, left: 0, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             
@@ -255,6 +285,9 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
                       <p style={{ color: metric.color }}>
                         {metric.name}: {data.value} {metric.unit}
                       </p>
+                      {data.isProcedure && (
+                        <p className="text-purple-600 font-medium">💉 Гемотрансфузия</p>
+                      )}
                       <p className="text-gray-500 text-xs">{data.documentTitle}</p>
                     </div>
                   )
@@ -271,23 +304,32 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
               activeDot={{ r: 6 }}
             />
             
-            {/* Маркеры гемотрансфузий — после XAxis и Line для корректного отображения */}
-            {procedureMarkers.map((proc, idx) => (
-              <ReferenceLine
-                key={`proc-${idx}`}
-                x={proc.dateFormatted}
-                stroke="#9333ea"
-                strokeWidth={2}
-                strokeDasharray="4 2"
-                label={{
-                  value: '💉',
-                  position: 'top',
-                  fontSize: 14,
-                }}
-              />
-            ))}
-          </LineChart>
+            {/* Маркеры гемотрансфузий как Scatter с кастомной формой */}
+            <Scatter
+              dataKey="procedureValue"
+              shape={<ProcedureMarkerShape />}
+            />
+          </ComposedChart>
         </ResponsiveContainer>
+        
+        {/* Список гемотрансфузий под графиком */}
+        {procedures.length > 0 && (
+          <div className="mt-3 bg-purple-50 border border-purple-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-purple-600">💉</span>
+              <span className="font-medium text-purple-800">
+                Гемотрансфузий: {procedures.length}
+              </span>
+            </div>
+            <div className="grid gap-1 text-sm">
+              {procedures.map((h, idx) => (
+                <div key={idx} className="text-purple-700">
+                  {new Date(h.date).toLocaleDateString('ru-RU')}: {h.beforeValue} → {h.afterValue} {h.unit}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

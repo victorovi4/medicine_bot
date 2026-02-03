@@ -372,7 +372,7 @@ export default function ExtractPage() {
                 {metrics.length > 0 ? (
                   <div className="space-y-4">
                     {/* Таблица сводки */}
-                    <MetricsSummaryTable metrics={metrics} procedures={procedures} />
+                    <MetricsSummaryTable metrics={metrics} />
                     
                     {/* Графики */}
                     <MetricsGrid metrics={metrics} compact procedures={procedures} />
@@ -455,79 +455,54 @@ function Section({
   )
 }
 
-// Таблица сводки по показателям
-function MetricsSummaryTable({ metrics, procedures = [] }: { metrics: MetricSummary[], procedures?: ProcedureMarker[] }) {
+// Таблица сводки по показателям (без гемотрансфузий — они показываются под графиком)
+function MetricsSummaryTable({ metrics }: { metrics: MetricSummary[], procedures?: ProcedureMarker[] }) {
   const metricsWithData = metrics.filter(m => m.dataPoints.length > 0)
-  const hemotransfusions = procedures.filter(p => p.type === 'hemotransfusion')
   
-  if (metricsWithData.length === 0 && hemotransfusions.length === 0) return null
+  if (metricsWithData.length === 0) return null
   
   return (
-    <div className="space-y-4">
-      {/* Гемотрансфузии */}
-      {hemotransfusions.length > 0 && (
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-purple-600">💉</span>
-            <span className="font-medium text-purple-800">
-              Гемотрансфузий: {hemotransfusions.length}
-            </span>
-          </div>
-          <div className="grid gap-1 text-sm">
-            {hemotransfusions.map((h, idx) => (
-              <div key={idx} className="text-purple-700">
-                {new Date(h.date).toLocaleDateString('ru-RU')}: {h.beforeValue} → {h.afterValue} {h.unit}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      
-      {/* Таблица показателей */}
-      {metricsWithData.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 pr-4">Показатель</th>
-                <th className="text-right py-2 px-2">Начало</th>
-                <th className="text-right py-2 px-2">Конец</th>
-                <th className="text-right py-2 px-2">Изменение</th>
-                <th className="text-left py-2 pl-2">Статус</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metricsWithData.map((m) => (
-                <tr key={m.name} className="border-b">
-                  <td className="py-2 pr-4 font-medium">{m.name}</td>
-                  <td className="py-2 px-2 text-right">
-                    {m.firstValue !== null ? `${m.firstValue} ${m.unit}` : '—'}
-                  </td>
-                  <td className="py-2 px-2 text-right">
-                    {m.lastValue !== null ? `${m.lastValue} ${m.unit}` : '—'}
-                  </td>
-                  <td className="py-2 px-2 text-right">
-                    {m.changePercent !== 0 ? (
-                      <span className={
-                        m.name.includes('ПСА') 
-                          ? (m.changeDirection === 'up' ? 'text-red-600' : 'text-green-600')
-                          : ''
-                      }>
-                        {m.changeDirection === 'up' ? '↑' : m.changeDirection === 'down' ? '↓' : '→'}
-                        {' '}
-                        {m.changePercent > 0 ? '+' : ''}{m.changePercent}%
-                      </span>
-                    ) : '→ 0%'}
-                  </td>
-                  <td className="py-2 pl-2">
-                    <StatusBadge status={m.lastStatus} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left py-2 pr-4">Показатель</th>
+            <th className="text-right py-2 px-2">Начало</th>
+            <th className="text-right py-2 px-2">Конец</th>
+            <th className="text-right py-2 px-2">Изменение</th>
+            <th className="text-left py-2 pl-2">Статус</th>
+          </tr>
+        </thead>
+        <tbody>
+          {metricsWithData.map((m) => (
+            <tr key={m.name} className="border-b">
+              <td className="py-2 pr-4 font-medium">{m.name}</td>
+              <td className="py-2 px-2 text-right">
+                {m.firstValue !== null ? `${m.firstValue} ${m.unit}` : '—'}
+              </td>
+              <td className="py-2 px-2 text-right">
+                {m.lastValue !== null ? `${m.lastValue} ${m.unit}` : '—'}
+              </td>
+              <td className="py-2 px-2 text-right">
+                {m.changePercent !== 0 ? (
+                  <span className={
+                    m.name.includes('ПСА') 
+                      ? (m.changeDirection === 'up' ? 'text-red-600' : 'text-green-600')
+                      : ''
+                  }>
+                    {m.changeDirection === 'up' ? '↑' : m.changeDirection === 'down' ? '↓' : '→'}
+                    {' '}
+                    {m.changePercent > 0 ? '+' : ''}{m.changePercent}%
+                  </span>
+                ) : '→ 0%'}
+              </td>
+              <td className="py-2 pl-2">
+                <StatusBadge status={m.lastStatus} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
