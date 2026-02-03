@@ -1,7 +1,8 @@
 'use client'
 
+import { useState, useEffect, useCallback } from 'react'
 import {
-  LineChart,
+  ComposedChart,
   Line,
   XAxis,
   YAxis,
@@ -13,7 +14,9 @@ import {
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { TrendingUp, TrendingDown, Minus, Plus, Trash2 } from 'lucide-react'
+import { AddEventModal } from './AddEventModal'
 
 interface DataPoint {
   date: string
@@ -39,12 +42,76 @@ interface MetricSummary {
   lastStatus: 'normal' | 'low' | 'high' | 'critical' | 'unknown'
 }
 
+interface MetricEvent {
+  id: string
+  metricName: string
+  date: string
+  eventType: string
+  label: string
+  color: string
+  endDate?: string | null
+  notes?: string | null
+}
+
+// Иконки для типов событий
+const EVENT_ICONS: Record<string, string> = {
+  hemotransfusion: '💉',
+  hormone_injection: '💊',
+  surgery: '🔪',
+  hospitalization: '🏥',
+  medication_start: '💊',
+  medication_end: '⏹️',
+  other: '📌',
+}
+
 interface MetricsChartProps {
   metric: MetricSummary
   compact?: boolean
+  showEventControls?: boolean
 }
 
-export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
+export function MetricsChart({ metric, compact = false, showEventControls = true }: MetricsChartProps) {
+  const [events, setEvents] = useState<MetricEvent[]>([])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [loadingEvents, setLoadingEvents] = useState(false)
+  
+  // Загрузка событий
+  const loadEvents = useCallback(async () => {
+    if (compact) return // Не загружаем события в компактном режиме
+    
+    setLoadingEvents(true)
+    try {
+      const response = await fetch(`/api/metric-events?metricName=${encodeURIComponent(metric.name)}`)
+      if (response.ok) {
+        const data = await response.json()
+        setEvents(data.events || [])
+      }
+    } catch (error) {
+      console.error('Error loading events:', error)
+    } finally {
+      setLoadingEvents(false)
+    }
+  }, [metric.name, compact])
+  
+  useEffect(() => {
+    loadEvents()
+  }, [loadEvents])
+  
+  // Удаление события
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm('Удалить это событие?')) return
+    
+    try {
+      const response = await fetch(`/api/metric-events/${eventId}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        loadEvents()
+      }
+    } catch (error) {
+      console.error('Error deleting event:', error)
+    }
+  }
   if (metric.dataPoints.length === 0) {
     return (
       <Card className={compact ? 'print:break-inside-avoid' : ''}>
@@ -67,6 +134,29 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
     }),
     fullDate: new Date(dp.date).toLocaleDateString('ru-RU'),
   }))
+  
+  // Подготовка маркеров событий — привязка к ближайшим точкам
+  const eventMarkers = events.map((event) => {
+    const eventDate = new Date(event.date).getTime()
+    
+    // Находим ближайшую точку данных
+    let closestIdx = 0
+    let minDiff = Infinity
+    
+    chartData.forEach((point, idx) => {
+      const diff = Math.abs(new Date(point.date).getTime() - eventDate)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestIdx = idx
+      }
+    })
+    
+    return {
+      ...event,
+      dateFormatted: chartData[closestIdx]?.dateFormatted || '',
+      isVisible: minDiff < 30 * 24 * 60 * 60 * 1000, // 30 дней
+    }
+  }).filter(e => e.isVisible)
 
   // Определяем диапазон Y оси
   const allValues = metric.dataPoints.map((d) => d.value)
@@ -122,6 +212,7 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
   const height = compact ? 150 : 200
 
   return (
+    <>
     <Card className={compact ? 'print:break-inside-avoid' : ''}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base flex items-center justify-between flex-wrap gap-2">
@@ -140,6 +231,18 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
                 {metric.changePercent}%
               </span>
             )}
+            {/* Кнопка добавления события */}
+            {showEventControls && !compact && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 print:hidden"
+                onClick={() => setShowAddModal(true)}
+                title="Добавить событие"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </CardTitle>
         {!compact && metric.firstValue !== null && metric.lastValue !== null && (
@@ -151,9 +254,9 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
-          <LineChart
+          <ComposedChart
             data={chartData}
-            margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+            margin={{ top: 20, right: 5, left: 0, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             
@@ -226,10 +329,66 @@ export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
               dot={{ fill: metric.color, strokeWidth: 2, r: 4 }}
               activeDot={{ r: 6 }}
             />
-          </LineChart>
+            
+            {/* Маркеры событий */}
+            {eventMarkers.map((event) => (
+              <ReferenceLine
+                key={event.id}
+                x={event.dateFormatted}
+                stroke={event.color}
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                label={{
+                  value: EVENT_ICONS[event.eventType] || '📌',
+                  position: 'top',
+                  fontSize: 14,
+                }}
+              />
+            ))}
+          </ComposedChart>
         </ResponsiveContainer>
+        
+        {/* Легенда событий */}
+        {!compact && events.length > 0 && (
+          <div className="mt-3 space-y-2 print:hidden">
+            <p className="text-xs font-medium text-gray-500">События на графике:</p>
+            <div className="flex flex-wrap gap-2">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-center gap-1 text-xs bg-gray-50 rounded-full px-2 py-1 group"
+                >
+                  <span 
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: event.color }}
+                  />
+                  <span>{EVENT_ICONS[event.eventType] || '📌'}</span>
+                  <span>{new Date(event.date).toLocaleDateString('ru-RU')}</span>
+                  <span className="text-gray-500">—</span>
+                  <span>{event.label}</span>
+                  <button
+                    onClick={() => handleDeleteEvent(event.id)}
+                    className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 ml-1"
+                    title="Удалить"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
+    
+    {/* Модальное окно добавления события */}
+    <AddEventModal
+      metricName={metric.name}
+      isOpen={showAddModal}
+      onClose={() => setShowAddModal(false)}
+      onEventAdded={loadEvents}
+    />
+    </>
   )
 }
 

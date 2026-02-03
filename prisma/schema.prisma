@@ -152,6 +152,35 @@ model Procedure {
 }
 
 // ============================================
+// СОБЫТИЯ НА ГРАФИКАХ (ручные маркеры)
+// ============================================
+
+// Событие/маркер на графике метрики
+model MetricEvent {
+  id          String   @id @default(uuid())
+  
+  // К какой метрике относится
+  metricName  String   // "Гемоглобин", "ПСА общий", "СРБ" или "*" для всех
+  
+  // Данные события
+  date        DateTime  // Дата события
+  eventType   String    // "hemotransfusion", "hormone_injection", "surgery", "hospitalization", "medication_start", "other"
+  label       String    // Краткое описание: "Гемотрансфузия 2 дозы", "Укол Лейпрорелин"
+  color       String    // Цвет маркера: "#9333ea", "#3b82f6"
+  
+  // Дополнительно
+  endDate     DateTime? // Для периодов (госпитализация): дата окончания
+  notes       String?   @db.Text // Подробности
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([metricName])
+  @@index([date])
+  @@index([eventType])
+}
+
+// ============================================
 // ДНЕВНИК ПАЦИЕНТА
 // ============================================
 
