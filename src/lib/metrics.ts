@@ -47,6 +47,16 @@ export const METRICS_CONFIG: Record<string, MetricConfig> = {
     color: '#3b82f6', // Синий
     description: 'Уровень гемоглобина в крови',
   },
+  'СРБ': {
+    name: 'СРБ',
+    aliases: ['C-реактивный белок', 'CRP', 'C-reactive protein', 'С-реактивный белок', 'СРБ ультрачувствительный', 'hs-CRP', 'СРБ количественно'],
+    unit: 'мг/л',
+    normalMin: 0,
+    normalMax: 5.0,
+    critical: 50.0, // Высокий уровень воспаления
+    color: '#f59e0b', // Янтарный — маркер воспаления
+    description: 'C-реактивный белок — маркер воспаления',
+  },
 }
 
 /**

@@ -79,12 +79,12 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
   }))
   
   // Подготовка маркеров процедур — найти ближайшую точку данных
-  const procedureMarkers = procedures.map((p) => {
+  const procedureMarkers = chartData.length === 0 ? [] : procedures.map((p) => {
     const procDate = new Date(p.date).getTime()
     
     // Находим ближайшую точку данных по дате
     let closestPoint = chartData[0]
-    let minDiff = Math.abs(new Date(chartData[0]?.date || 0).getTime() - procDate)
+    let minDiff = Math.abs(new Date(chartData[0].date).getTime() - procDate)
     
     for (const point of chartData) {
       const diff = Math.abs(new Date(point.date).getTime() - procDate)
@@ -96,10 +96,7 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
     
     return {
       ...p,
-      dateFormatted: closestPoint?.dateFormatted || new Date(p.date).toLocaleDateString('ru-RU', {
-        day: '2-digit',
-        month: '2-digit',
-      }),
+      dateFormatted: closestPoint.dateFormatted,
       // Показывать только если разница меньше 7 дней
       isVisible: minDiff < 7 * 24 * 60 * 60 * 1000,
     }
@@ -237,22 +234,6 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
               />
             )}
             
-            {/* Маркеры гемотрансфузий */}
-            {procedureMarkers.map((proc, idx) => (
-              <ReferenceLine
-                key={`proc-${idx}`}
-                x={proc.dateFormatted}
-                stroke="#9333ea"
-                strokeWidth={2}
-                strokeDasharray="4 2"
-                label={{
-                  value: '💉',
-                  position: 'top',
-                  fontSize: 14,
-                }}
-              />
-            ))}
-            
             <XAxis
               dataKey="dateFormatted"
               tick={{ fontSize: 10 }}
@@ -289,6 +270,22 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
               dot={{ fill: metric.color, strokeWidth: 2, r: 4 }}
               activeDot={{ r: 6 }}
             />
+            
+            {/* Маркеры гемотрансфузий — после XAxis и Line для корректного отображения */}
+            {procedureMarkers.map((proc, idx) => (
+              <ReferenceLine
+                key={`proc-${idx}`}
+                x={proc.dateFormatted}
+                stroke="#9333ea"
+                strokeWidth={2}
+                strokeDasharray="4 2"
+                label={{
+                  value: '💉',
+                  position: 'top',
+                  fontSize: 14,
+                }}
+              />
+            ))}
           </LineChart>
         </ResponsiveContainer>
       </CardContent>
@@ -299,9 +296,10 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
 interface MetricsGridProps {
   metrics: MetricSummary[]
   compact?: boolean
+  procedures?: ProcedureMarker[]
 }
 
-export function MetricsGrid({ metrics, compact = false }: MetricsGridProps) {
+export function MetricsGrid({ metrics, compact = false, procedures = [] }: MetricsGridProps) {
   // Фильтруем метрики с данными
   const metricsWithData = metrics.filter((m) => m.dataPoints.length > 0)
 
@@ -314,11 +312,19 @@ export function MetricsGrid({ metrics, compact = false }: MetricsGridProps) {
       </div>
     )
   }
+  
+  // Фильтруем гемотрансфузии для графика гемоглобина
+  const hemotransfusions = procedures.filter(p => p.type === 'hemotransfusion')
 
   return (
     <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'md:grid-cols-2'}`}>
       {metricsWithData.map((metric) => (
-        <MetricsChart key={metric.name} metric={metric} compact={compact} />
+        <MetricsChart 
+          key={metric.name} 
+          metric={metric} 
+          compact={compact}
+          procedures={metric.name === 'Гемоглобин' ? hemotransfusions : []}
+        />
       ))}
     </div>
   )
