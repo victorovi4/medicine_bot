@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrismaClient } from '@/lib/db'
-import { isTestModeFromRequest } from '@/lib/test-mode'
+import { isTestModeRequest } from '@/lib/test-mode'
 import { EVENT_TYPES, EventType } from '../route'
 
 interface RouteParams {
@@ -12,7 +12,7 @@ interface RouteParams {
  * Получить событие по ID
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const testMode = isTestModeFromRequest(request)
+  const testMode = isTestModeRequest(request)
   const prisma = getPrismaClient({ testMode })
   const { id } = await params
   
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Обновить событие
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const testMode = isTestModeFromRequest(request)
+  const testMode = isTestModeRequest(request)
   const prisma = getPrismaClient({ testMode })
   const { id } = await params
   
@@ -89,7 +89,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  * Удалить событие
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const testMode = isTestModeFromRequest(request)
+  const testMode = isTestModeRequest(request)
   const prisma = getPrismaClient({ testMode })
   const { id } = await params
   

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPrismaClient } from '@/lib/db'
-import { isTestModeFromRequest } from '@/lib/test-mode'
+import { isTestModeRequest } from '@/lib/test-mode'
 
 // Предустановленные типы событий с цветами
 export const EVENT_TYPES = {
@@ -59,7 +59,7 @@ export type EventType = keyof typeof EVENT_TYPES
  * - toDate: конец периода (ISO string)
  */
 export async function GET(request: NextRequest) {
-  const testMode = isTestModeFromRequest(request)
+  const testMode = isTestModeRequest(request)
   const prisma = getPrismaClient({ testMode })
   
   const { searchParams } = new URL(request.url)
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
  * Создать новое событие
  */
 export async function POST(request: NextRequest) {
-  const testMode = isTestModeFromRequest(request)
+  const testMode = isTestModeRequest(request)
   const prisma = getPrismaClient({ testMode })
   
   try {
