@@ -77,19 +77,9 @@ interface MetricSummary {
   lastStatus: 'normal' | 'low' | 'high' | 'critical' | 'unknown'
 }
 
-interface ProcedureMarker {
-  date: string
-  type: string
-  name: string
-  beforeValue?: number
-  afterValue?: number
-  unit?: string
-}
-
 interface MetricsResponse {
   period: { from: string; to: string }
   metrics: MetricSummary[]
-  procedures: ProcedureMarker[]
 }
 
 export default function ExtractPage() {
@@ -98,7 +88,6 @@ export default function ExtractPage() {
   const [error, setError] = useState<string | null>(null)
   const [extract, setExtract] = useState<ExtractData | null>(null)
   const [metrics, setMetrics] = useState<MetricSummary[]>([])
-  const [procedures, setProcedures] = useState<ProcedureMarker[]>([])
   const [copied, setCopied] = useState(false)
   
   // Загружаем кэшированную выписку и метрики при открытии
@@ -130,9 +119,6 @@ export default function ExtractPage() {
       
       if (metricsData.metrics) {
         setMetrics(metricsData.metrics)
-      }
-      if (metricsData.procedures) {
-        setProcedures(metricsData.procedures)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка загрузки')
@@ -166,9 +152,6 @@ export default function ExtractPage() {
       if (metricsData.metrics) {
         setMetrics(metricsData.metrics)
       }
-      if (metricsData.procedures) {
-        setProcedures(metricsData.procedures)
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Неизвестная ошибка')
     } finally {
@@ -179,7 +162,7 @@ export default function ExtractPage() {
   const copyToClipboard = () => {
     if (!extract) return
     
-    const text = formatExtractAsText(extract, metrics, procedures)
+    const text = formatExtractAsText(extract, metrics)
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
@@ -375,7 +358,7 @@ export default function ExtractPage() {
                     <MetricsSummaryTable metrics={metrics} />
                     
                     {/* Графики */}
-                    <MetricsGrid metrics={metrics} compact procedures={procedures} />
+                    <MetricsGrid metrics={metrics} compact />
                   </div>
                 ) : (
                   <p className="text-gray-500">
@@ -455,8 +438,8 @@ function Section({
   )
 }
 
-// Таблица сводки по показателям (без гемотрансфузий — они показываются под графиком)
-function MetricsSummaryTable({ metrics }: { metrics: MetricSummary[], procedures?: ProcedureMarker[] }) {
+// Таблица сводки по показателям
+function MetricsSummaryTable({ metrics }: { metrics: MetricSummary[] }) {
   const metricsWithData = metrics.filter(m => m.dataPoints.length > 0)
   
   if (metricsWithData.length === 0) return null
@@ -532,7 +515,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // Форматирование в текст для копирования
-function formatExtractAsText(extract: ExtractData, metrics: MetricSummary[], procedures: ProcedureMarker[] = []): string {
+function formatExtractAsText(extract: ExtractData, metrics: MetricSummary[]): string {
   let text = `
 ВЫПИСКА ИЗ МЕДИЦИНСКОЙ КАРТЫ АМБУЛАТОРНОГО БОЛЬНОГО
 Форма № 027/у
@@ -553,15 +536,6 @@ ${extract.diagnosticStudies}
 
 ДИНАМИКА КЛЮЧЕВЫХ ПОКАЗАТЕЛЕЙ
 `
-
-  // Гемотрансфузии
-  const hemotransfusions = procedures.filter(p => p.type === 'hemotransfusion')
-  if (hemotransfusions.length > 0) {
-    text += `Гемотрансфузий: ${hemotransfusions.length}\n`
-    hemotransfusions.forEach(h => {
-      text += `  ${new Date(h.date).toLocaleDateString('ru-RU')}: ${h.beforeValue} → ${h.afterValue} ${h.unit}\n`
-    })
-  }
 
   const metricsWithData = metrics.filter(m => m.dataPoints.length > 0)
   if (metricsWithData.length > 0) {

@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  ComposedChart,
+  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -10,43 +10,10 @@ import {
   ReferenceLine,
   ResponsiveContainer,
   ReferenceArea,
-  Scatter,
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-
-// Кастомная точка для маркера гемотрансфузии
-interface CustomShapeProps {
-  cx?: number
-  cy?: number
-  payload?: { isProcedure?: boolean; procedureValue?: number | null }
-}
-
-function ProcedureMarkerShape({ cx, cy, payload }: CustomShapeProps) {
-  // Рисуем маркер ТОЛЬКО если это действительно процедура
-  if (cx === undefined || cy === undefined) return null
-  if (!payload?.isProcedure || payload?.procedureValue === null) return null
-  
-  return (
-    <g>
-      {/* Вертикальная линия */}
-      <line
-        x1={cx}
-        y1={0}
-        x2={cx}
-        y2={500}
-        stroke="#9333ea"
-        strokeWidth={2}
-        strokeDasharray="4 2"
-      />
-      {/* Иконка сверху */}
-      <text x={cx} y={15} textAnchor="middle" fontSize={14}>
-        💉
-      </text>
-    </g>
-  )
-}
 
 interface DataPoint {
   date: string
@@ -72,22 +39,12 @@ interface MetricSummary {
   lastStatus: 'normal' | 'low' | 'high' | 'critical' | 'unknown'
 }
 
-interface ProcedureMarker {
-  date: string
-  type: string
-  name: string
-  beforeValue?: number
-  afterValue?: number
-  unit?: string
-}
-
 interface MetricsChartProps {
   metric: MetricSummary
   compact?: boolean
-  procedures?: ProcedureMarker[]
 }
 
-export function MetricsChart({ metric, compact = false, procedures = [] }: MetricsChartProps) {
+export function MetricsChart({ metric, compact = false }: MetricsChartProps) {
   if (metric.dataPoints.length === 0) {
     return (
       <Card className={compact ? 'print:break-inside-avoid' : ''}>
@@ -101,27 +58,7 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
     )
   }
 
-  // Создаём Set дат процедур для быстрой проверки
-  const procedureDatesSet = new Set<string>()
-  procedures.forEach((p) => {
-    const procDate = new Date(p.date).getTime()
-    // Находим ближайшую точку данных
-    let closestDate = ''
-    let minDiff = Infinity
-    for (const dp of metric.dataPoints) {
-      const diff = Math.abs(new Date(dp.date).getTime() - procDate)
-      if (diff < minDiff) {
-        minDiff = diff
-        closestDate = dp.date
-      }
-    }
-    // Добавляем если разница < 7 дней
-    if (minDiff < 7 * 24 * 60 * 60 * 1000) {
-      procedureDatesSet.add(closestDate)
-    }
-  })
-
-  // Подготовка данных для графика с пометкой процедур
+  // Подготовка данных для графика
   const chartData = metric.dataPoints.map((dp) => ({
     ...dp,
     dateFormatted: new Date(dp.date).toLocaleDateString('ru-RU', {
@@ -129,9 +66,6 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
       month: '2-digit',
     }),
     fullDate: new Date(dp.date).toLocaleDateString('ru-RU'),
-    isProcedure: procedureDatesSet.has(dp.date),
-    // Значение для scatter — показываем только если это процедура
-    procedureValue: procedureDatesSet.has(dp.date) ? dp.value : null,
   }))
 
   // Определяем диапазон Y оси
@@ -214,22 +148,12 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
             {chartData[chartData.length - 1]?.fullDate}: {metric.lastValue} {metric.unit}
           </p>
         )}
-        {procedures.length > 0 && (
-          <p className="text-xs text-purple-600 mt-1">
-            💉 Гемотрансфузий: {procedures.length} 
-            {procedures.length === 1 && procedures[0].beforeValue && procedures[0].afterValue && (
-              <span className="ml-2">
-                ({procedures[0].beforeValue} → {procedures[0].afterValue} {procedures[0].unit})
-              </span>
-            )}
-          </p>
-        )}
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
-          <ComposedChart
+          <LineChart
             data={chartData}
-            margin={{ top: 20, right: 5, left: 0, bottom: 5 }}
+            margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             
@@ -287,9 +211,6 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
                       <p style={{ color: metric.color }}>
                         {metric.name}: {data.value} {metric.unit}
                       </p>
-                      {data.isProcedure && (
-                        <p className="text-purple-600 font-medium">💉 Гемотрансфузия</p>
-                      )}
                       <p className="text-gray-500 text-xs">{data.documentTitle}</p>
                     </div>
                   )
@@ -305,35 +226,8 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
               dot={{ fill: metric.color, strokeWidth: 2, r: 4 }}
               activeDot={{ r: 6 }}
             />
-            
-            {/* Маркеры гемотрансфузий как Scatter с кастомной формой — только если есть процедуры */}
-            {procedures.length > 0 && (
-              <Scatter
-                dataKey="procedureValue"
-                shape={<ProcedureMarkerShape />}
-              />
-            )}
-          </ComposedChart>
+          </LineChart>
         </ResponsiveContainer>
-        
-        {/* Список гемотрансфузий под графиком */}
-        {procedures.length > 0 && (
-          <div className="mt-3 bg-purple-50 border border-purple-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-purple-600">💉</span>
-              <span className="font-medium text-purple-800">
-                Гемотрансфузий: {procedures.length}
-              </span>
-            </div>
-            <div className="grid gap-1 text-sm">
-              {procedures.map((h, idx) => (
-                <div key={idx} className="text-purple-700">
-                  {new Date(h.date).toLocaleDateString('ru-RU')}: {h.beforeValue} → {h.afterValue} {h.unit}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </CardContent>
     </Card>
   )
@@ -342,10 +236,9 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
 interface MetricsGridProps {
   metrics: MetricSummary[]
   compact?: boolean
-  procedures?: ProcedureMarker[]
 }
 
-export function MetricsGrid({ metrics, compact = false, procedures = [] }: MetricsGridProps) {
+export function MetricsGrid({ metrics, compact = false }: MetricsGridProps) {
   // Фильтруем метрики с данными
   const metricsWithData = metrics.filter((m) => m.dataPoints.length > 0)
 
@@ -358,9 +251,6 @@ export function MetricsGrid({ metrics, compact = false, procedures = [] }: Metri
       </div>
     )
   }
-  
-  // Фильтруем гемотрансфузии для графика гемоглобина
-  const hemotransfusions = procedures.filter(p => p.type === 'hemotransfusion')
 
   return (
     <div className={`grid gap-4 ${compact ? 'grid-cols-1' : 'md:grid-cols-2'}`}>
@@ -369,7 +259,6 @@ export function MetricsGrid({ metrics, compact = false, procedures = [] }: Metri
           key={metric.name} 
           metric={metric} 
           compact={compact}
-          procedures={metric.name === 'Гемоглобин' ? hemotransfusions : []}
         />
       ))}
     </div>
