@@ -20,11 +20,13 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 interface CustomShapeProps {
   cx?: number
   cy?: number
-  payload?: { isProcedure?: boolean }
+  payload?: { isProcedure?: boolean; procedureValue?: number | null }
 }
 
-function ProcedureMarkerShape({ cx, cy }: CustomShapeProps) {
+function ProcedureMarkerShape({ cx, cy, payload }: CustomShapeProps) {
+  // Рисуем маркер ТОЛЬКО если это действительно процедура
   if (cx === undefined || cy === undefined) return null
+  if (!payload?.isProcedure || payload?.procedureValue === null) return null
   
   return (
     <g>
@@ -304,11 +306,13 @@ export function MetricsChart({ metric, compact = false, procedures = [] }: Metri
               activeDot={{ r: 6 }}
             />
             
-            {/* Маркеры гемотрансфузий как Scatter с кастомной формой */}
-            <Scatter
-              dataKey="procedureValue"
-              shape={<ProcedureMarkerShape />}
-            />
+            {/* Маркеры гемотрансфузий как Scatter с кастомной формой — только если есть процедуры */}
+            {procedures.length > 0 && (
+              <Scatter
+                dataKey="procedureValue"
+                shape={<ProcedureMarkerShape />}
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
         
