@@ -74,6 +74,12 @@ const PROCEDURE_COLORS: Record<string, string> = {
   puncture: '#06b6d4',        // циановый
 }
 
+// Какие типы процедур релевантны каким метрикам
+// Если типа нет в маппинге — процедура не показывается ни на одном графике
+const PROCEDURE_METRIC_RELEVANCE: Record<string, string[]> = {
+  hemotransfusion: ['Гемоглобин'],
+}
+
 // Названия типов процедур
 const PROCEDURE_LABELS: Record<string, string> = {
   hemotransfusion: 'Гемотрансфузия',
@@ -186,8 +192,13 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
     }
   }).filter(e => e.isVisible)
 
-  // Подготовка маркеров процедур — привязка к ближайшим точкам
-  const procedureMarkers = (procedures || []).map((proc) => {
+  // Подготовка маркеров процедур — привязка к ближайшим точкам, только релевантные
+  const relevantProcedures = (procedures || []).filter((proc) => {
+    const relevantMetrics = PROCEDURE_METRIC_RELEVANCE[proc.type]
+    return relevantMetrics?.includes(metric.name)
+  })
+
+  const procedureMarkers = relevantProcedures.map((proc) => {
     const procDate = new Date(proc.date).getTime()
 
     let closestIdx = 0
