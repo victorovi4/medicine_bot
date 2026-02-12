@@ -61,16 +61,44 @@ const EVENT_ICONS: Record<string, string> = {
   hospitalization: '🏥',
   medication_start: '💊',
   medication_end: '⏹️',
+  manipulation: '🩹',
+  puncture: '🪡',
   other: '📌',
+}
+
+// Цвета для типов процедур
+const PROCEDURE_COLORS: Record<string, string> = {
+  hemotransfusion: '#9333ea', // фиолетовый
+  surgery: '#ef4444',         // красный
+  manipulation: '#f59e0b',    // жёлтый
+  puncture: '#06b6d4',        // циановый
+}
+
+// Названия типов процедур
+const PROCEDURE_LABELS: Record<string, string> = {
+  hemotransfusion: 'Гемотрансфузия',
+  surgery: 'Операция',
+  manipulation: 'Манипуляция',
+  puncture: 'Пункция',
+}
+
+interface ProcedureMarker {
+  date: string
+  type: string
+  name: string
+  beforeValue?: number
+  afterValue?: number
+  unit?: string
 }
 
 interface MetricsChartProps {
   metric: MetricSummary
   compact?: boolean
   showEventControls?: boolean
+  procedures?: ProcedureMarker[]
 }
 
-export function MetricsChart({ metric, compact = false, showEventControls = true }: MetricsChartProps) {
+export function MetricsChart({ metric, compact = false, showEventControls = true, procedures = [] }: MetricsChartProps) {
   const [events, setEvents] = useState<MetricEvent[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
   const [loadingEvents, setLoadingEvents] = useState(false)
@@ -157,6 +185,29 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
       isVisible: minDiff < 30 * 24 * 60 * 60 * 1000, // 30 дней
     }
   }).filter(e => e.isVisible)
+
+  // Подготовка маркеров процедур — привязка к ближайшим точкам
+  const procedureMarkers = (procedures || []).map((proc) => {
+    const procDate = new Date(proc.date).getTime()
+
+    let closestIdx = 0
+    let minDiff = Infinity
+
+    chartData.forEach((point, idx) => {
+      const diff = Math.abs(new Date(point.date).getTime() - procDate)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestIdx = idx
+      }
+    })
+
+    return {
+      ...proc,
+      dateFormatted: chartData[closestIdx]?.dateFormatted || '',
+      color: PROCEDURE_COLORS[proc.type] || '#6b7280',
+      isVisible: minDiff < 30 * 24 * 60 * 60 * 1000,
+    }
+  }).filter(p => p.isVisible)
 
   // Определяем диапазон Y оси
   const allValues = metric.dataPoints.map((d) => d.value)
@@ -330,7 +381,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
               activeDot={{ r: 6 }}
             />
             
-            {/* Маркеры событий */}
+            {/* Маркеры событий (ручные — пунктирные) */}
             {eventMarkers.map((event) => (
               <ReferenceLine
                 key={event.id}
@@ -340,6 +391,21 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
                 strokeDasharray="4 2"
                 label={{
                   value: EVENT_ICONS[event.eventType] || '📌',
+                  position: 'top',
+                  fontSize: 14,
+                }}
+              />
+            ))}
+
+            {/* Маркеры процедур (из БД — сплошные) */}
+            {procedureMarkers.map((proc, idx) => (
+              <ReferenceLine
+                key={`proc-${idx}`}
+                x={proc.dateFormatted}
+                stroke={proc.color}
+                strokeWidth={2}
+                label={{
+                  value: EVENT_ICONS[proc.type] || '📌',
                   position: 'top',
                   fontSize: 14,
                 }}
@@ -358,7 +424,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
                   key={event.id}
                   className="flex items-center gap-1 text-xs bg-gray-50 rounded-full px-2 py-1 group"
                 >
-                  <span 
+                  <span
                     className="w-2 h-2 rounded-full"
                     style={{ backgroundColor: event.color }}
                   />
@@ -373,6 +439,30 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Легенда процедур */}
+        {!compact && procedureMarkers.length > 0 && (
+          <div className="mt-3 space-y-2 print:hidden">
+            <p className="text-xs font-medium text-gray-500">Процедуры:</p>
+            <div className="flex flex-wrap gap-2">
+              {procedureMarkers.map((proc, idx) => (
+                <div
+                  key={`proc-legend-${idx}`}
+                  className="flex items-center gap-1 text-xs bg-gray-50 rounded-full px-2 py-1"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: proc.color }}
+                  />
+                  <span>{EVENT_ICONS[proc.type] || '📌'}</span>
+                  <span>{new Date(proc.date).toLocaleDateString('ru-RU')}</span>
+                  <span className="text-gray-500">—</span>
+                  <span>{proc.name || PROCEDURE_LABELS[proc.type] || proc.type}</span>
                 </div>
               ))}
             </div>

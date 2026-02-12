@@ -32,12 +32,22 @@ interface MetricSummary {
   lastStatus: 'normal' | 'low' | 'high' | 'critical' | 'unknown'
 }
 
+interface ProcedureMarker {
+  date: string
+  type: string
+  name: string
+  beforeValue?: number
+  afterValue?: number
+  unit?: string
+}
+
 interface MetricsResponse {
   period: {
     from: string
     to: string
   }
   metrics: MetricSummary[]
+  procedures: ProcedureMarker[]
 }
 
 function formatDate(dateStr: string): string {
@@ -214,7 +224,7 @@ export default function MetricsPage() {
             {metricsWithData.map(metric => (
               <Card key={metric.name}>
                 <CardContent className="pt-6">
-                  <MetricsChart metric={metric} />
+                  <MetricsChart metric={metric} procedures={data?.procedures ?? []} />
                 </CardContent>
               </Card>
             ))}
