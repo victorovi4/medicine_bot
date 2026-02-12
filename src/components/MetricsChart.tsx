@@ -159,36 +159,43 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
     )
   }
 
-  // Подготовка данных для графика
-  const chartData = metric.dataPoints.map((dp) => ({
+  // Подготовка данных для графика — xKey уникален для каждой точки
+  const chartData = metric.dataPoints.map((dp, idx) => ({
     ...dp,
+    xKey: String(idx),
     dateFormatted: new Date(dp.date).toLocaleDateString('ru-RU', {
       day: '2-digit',
       month: '2-digit',
     }),
     fullDate: new Date(dp.date).toLocaleDateString('ru-RU'),
   }))
-  
-  // Подготовка маркеров событий — привязка к ближайшим точкам
-  const eventMarkers = events.map((event) => {
-    const eventDate = new Date(event.date).getTime()
-    
-    // Находим ближайшую точку данных
+
+  // Хелпер: найти ближайшую точку данных по дате
+  function findClosestPoint(targetDate: string) {
+    const target = new Date(targetDate).getTime()
     let closestIdx = 0
     let minDiff = Infinity
-    
+
     chartData.forEach((point, idx) => {
-      const diff = Math.abs(new Date(point.date).getTime() - eventDate)
+      const diff = Math.abs(new Date(point.date).getTime() - target)
       if (diff < minDiff) {
         minDiff = diff
         closestIdx = idx
       }
     })
-    
+
+    return { closestIdx, minDiff }
+  }
+
+  const MAX_SNAP_DISTANCE = 30 * 24 * 60 * 60 * 1000 // 30 дней
+
+  // Подготовка маркеров событий — привязка к ближайшим точкам
+  const eventMarkers = events.map((event) => {
+    const { closestIdx, minDiff } = findClosestPoint(event.date)
     return {
       ...event,
-      dateFormatted: chartData[closestIdx]?.dateFormatted || '',
-      isVisible: minDiff < 30 * 24 * 60 * 60 * 1000, // 30 дней
+      xKey: chartData[closestIdx]?.xKey || '',
+      isVisible: minDiff < MAX_SNAP_DISTANCE,
     }
   }).filter(e => e.isVisible)
 
@@ -199,24 +206,12 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
   })
 
   const procedureMarkers = relevantProcedures.map((proc) => {
-    const procDate = new Date(proc.date).getTime()
-
-    let closestIdx = 0
-    let minDiff = Infinity
-
-    chartData.forEach((point, idx) => {
-      const diff = Math.abs(new Date(point.date).getTime() - procDate)
-      if (diff < minDiff) {
-        minDiff = diff
-        closestIdx = idx
-      }
-    })
-
+    const { closestIdx, minDiff } = findClosestPoint(proc.date)
     return {
       ...proc,
-      dateFormatted: chartData[closestIdx]?.dateFormatted || '',
+      xKey: chartData[closestIdx]?.xKey || '',
       color: PROCEDURE_COLORS[proc.type] || '#6b7280',
-      isVisible: minDiff < 30 * 24 * 60 * 60 * 1000,
+      isVisible: minDiff < MAX_SNAP_DISTANCE,
     }
   }).filter(p => p.isVisible)
 
@@ -356,9 +351,10 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
             )}
             
             <XAxis
-              dataKey="dateFormatted"
+              dataKey="xKey"
               tick={{ fontSize: 10 }}
               tickMargin={5}
+              tickFormatter={(val) => chartData[Number(val)]?.dateFormatted || val}
             />
             <YAxis
               domain={[yMin, yMax]}
@@ -396,7 +392,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
             {eventMarkers.map((event) => (
               <ReferenceLine
                 key={event.id}
-                x={event.dateFormatted}
+                x={event.xKey}
                 stroke={event.color}
                 strokeWidth={2}
                 strokeDasharray="4 2"
@@ -412,7 +408,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
             {procedureMarkers.map((proc, idx) => (
               <ReferenceLine
                 key={`proc-${idx}`}
-                x={proc.dateFormatted}
+                x={proc.xKey}
                 stroke={proc.color}
                 strokeWidth={2}
                 label={{
