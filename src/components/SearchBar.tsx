@@ -233,7 +233,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
         <Input
           ref={inputRef}
           type="text"
-          placeholder="Поиск: простата, ПСА, уролог..."
+          placeholder="Поиск по документам..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => {

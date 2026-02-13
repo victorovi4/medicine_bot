@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
         birthDate: getFormattedBirthDate(),
         age: getAge(),
         address: 'Адрес не указан',
-        occupation: 'Пенсионер',
+        occupation: PATIENT.occupation,
       },
       period: {
         from: periodFrom.toLocaleDateString('ru-RU'),

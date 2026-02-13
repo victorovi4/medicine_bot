@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { PATIENT, getAge } from '@/lib/patient'
 
 // Модель Claude через OpenRouter
 const MODEL = 'anthropic/claude-sonnet-4'
@@ -165,7 +166,7 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
     Пример: [{"name": "Гемоглобин", "unit": "г/л", "values": [{"date": "2026-01-26", "value": 87}, {"date": "2026-01-28", "value": 75}, {"date": "2026-01-30", "value": 108}]}]
     Если динамики нет (одиночный анализ) — пустой массив [].
 
-Контекст пациента: мужчина 78 лет, основной диагноз — рак предстательной железы (C61).
+Контекст пациента: ${PATIENT.gender} ${getAge()} лет, основной диагноз — ${PATIENT.mainDiagnosis || 'не указан'}${PATIENT.mainDiagnosisCode ? ` (${PATIENT.mainDiagnosisCode})` : ''}.
 
 ВАЖНО: 
 - Заключение врача и рекомендации извлекай ДОСЛОВНО из документа, не перефразируй!

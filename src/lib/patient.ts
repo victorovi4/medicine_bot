@@ -1,7 +1,7 @@
 /**
  * Профиль пациента.
- * Хранится в коде, т.к. пациент один.
- * В будущем можно вынести в БД (таблица Patient).
+ * Читается из environment variables с фоллбэком на данные Иоффе В.Б.
+ * Для нового пациента — задать env vars в Vercel project settings.
  */
 
 export interface PatientProfile {
@@ -10,56 +10,60 @@ export interface PatientProfile {
   lastName: string
   patronymic: string
   birthDate: string // YYYY-MM-DD
-  
+  gender: string
+  occupation: string
+
   // Текущий период лечения
   treatmentStartDate: string // YYYY-MM-DD — начало текущего периода лечения
-  
+
   // Диагнозы
   mainDiagnosis: string | null
   mainDiagnosisCode: string | null // МКБ-10, например C61
   comorbidities: string[] // Сопутствующие заболевания
-  
+
   // Мониторинг
   trackingMetrics: string[] // Какие показатели отслеживать
-  
+
   // Дополнительно
   allergies: string[]
   notes: string
 }
 
+function parseList(envValue: string | undefined, defaults: string[]): string[] {
+  if (!envValue) return defaults
+  return envValue.split(',').map(s => s.trim()).filter(Boolean)
+}
+
 /**
- * Данные пациента Иоффе В.Б.
+ * Профиль пациента из env vars с фоллбэком на данные Иоффе В.Б.
  */
 export const PATIENT: PatientProfile = {
-  firstName: 'Виктор',
-  lastName: 'Иоффе',
-  patronymic: 'Борисович',
-  birthDate: '1947-03-15',
-  
-  // Текущий период лечения (начало)
-  treatmentStartDate: '2025-02-01',
-  
-  // Основной диагноз
-  mainDiagnosis: 'Рак предстательной железы',
-  mainDiagnosisCode: 'C61',
-  
-  // Сопутствующие заболевания (краткие названия для шапки)
-  comorbidities: [
+  firstName: process.env.PATIENT_FIRST_NAME || 'Виктор',
+  lastName: process.env.PATIENT_LAST_NAME || 'Иоффе',
+  patronymic: process.env.PATIENT_PATRONYMIC || 'Борисович',
+  birthDate: process.env.PATIENT_BIRTH_DATE || '1947-03-15',
+  gender: process.env.PATIENT_GENDER || 'мужчина',
+  occupation: process.env.PATIENT_OCCUPATION || 'Пенсионер',
+
+  treatmentStartDate: process.env.PATIENT_TREATMENT_START || '2025-02-01',
+
+  mainDiagnosis: process.env.PATIENT_DIAGNOSIS ?? 'Рак предстательной железы',
+  mainDiagnosisCode: process.env.PATIENT_DIAGNOSIS_CODE ?? 'C61',
+
+  comorbidities: parseList(process.env.PATIENT_COMORBIDITIES, [
     'Анемия',
     'ИБС',
     'ГБ 3 ст.',
     'ХСН 2а',
     'Глаукома',
-  ],
-  
-  // Показатели для мониторинга
-  trackingMetrics: ['ПСА общий', 'ПСА свободный', 'Гемоглобин', 'СРБ'],
-  
-  // Аллергии (пока нет)
-  allergies: [],
-  
-  // Заметки
-  notes: '',
+  ]),
+
+  trackingMetrics: parseList(process.env.PATIENT_TRACKING_METRICS, [
+    'ПСА общий', 'ПСА свободный', 'Гемоглобин', 'СРБ',
+  ]),
+
+  allergies: parseList(process.env.PATIENT_ALLERGIES, []),
+  notes: process.env.PATIENT_NOTES || '',
 }
 
 /**

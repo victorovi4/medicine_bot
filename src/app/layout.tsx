@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { getShortName } from "@/lib/patient";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,10 +13,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin", "cyrillic"],
 });
 
-export const metadata: Metadata = {
-  title: "Медицинская карта — Иоффе В.Б.",
-  description: "Электронная медицинская карта пациента",
-};
+export function generateMetadata(): Metadata {
+  return {
+    title: `Медицинская карта — ${getShortName()}`,
+    description: "Электронная медицинская карта пациента",
+  };
+}
 
 export default function RootLayout({
   children,

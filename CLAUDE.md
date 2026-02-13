@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Обзор проекта
 
-Персональная электронная медицинская карта пациента Иоффе В.Б. Построена на Next.js 16 (App Router), TypeScript, Prisma, деплоится на Vercel. Интерфейс и медицинский контент — на русском языке.
+Персональная электронная медицинская карта. Один инстанс = один пациент. Профиль пациента параметризован через env vars (см. `src/lib/patient.ts`), дефолт — Иоффе В.Б. Построена на Next.js 16 (App Router), TypeScript, Prisma, деплоится на Vercel. Интерфейс и медицинский контент — на русском языке.
 
 ## Команды
 
@@ -68,6 +68,9 @@ const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
 
 ### Переменные окружения
 Обязательные: `DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`, `OPENROUTER_API_KEY`, `TELEGRAM_BOT_TOKEN`, `NEXT_PUBLIC_APP_URL`. Опциональные: `TEST_DATABASE_URL`, `TELEGRAM_ALLOWED_USERS`.
+
+**Профиль пациента** (все опциональные, дефолт — Иоффе В.Б.):
+`PATIENT_FIRST_NAME`, `PATIENT_LAST_NAME`, `PATIENT_PATRONYMIC`, `PATIENT_BIRTH_DATE`, `PATIENT_GENDER`, `PATIENT_OCCUPATION`, `PATIENT_TREATMENT_START`, `PATIENT_DIAGNOSIS`, `PATIENT_DIAGNOSIS_CODE`, `PATIENT_COMORBIDITIES` (через запятую), `PATIENT_TRACKING_METRICS` (через запятую), `PATIENT_ALLERGIES` (через запятую).
 
 ### Деплой
 Vercel. Скрипт `vercel-build` выполняет `prisma generate && prisma db push --skip-generate && next build`. Таймаут функций — 60с для `/api/analyze` и `/api/telegram/webhook` (настроено в `vercel.json`).

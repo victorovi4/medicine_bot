@@ -657,7 +657,7 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
         </Label>
         <Input
           id="tags"
-          placeholder="онкология, ПСА, простата"
+          placeholder="теги через запятую"
           value={formData.tags}
           onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
         />
