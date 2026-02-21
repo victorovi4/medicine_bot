@@ -356,7 +356,9 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
   // 1. Попытка извлечь текст из PDF (OCR-слой)
   try {
     // Динамический импорт: pdf-parse не совместим со статическим импортом в Turbopack
-    const pdfParse = (await import('pdf-parse')).default
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pdfParseModule = await import('pdf-parse') as any
+    const pdfParse = pdfParseModule.default ?? pdfParseModule
     const pdfData = await pdfParse(buffer)
     const text = pdfData.text?.trim()
 
