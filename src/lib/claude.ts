@@ -1,4 +1,6 @@
 import OpenAI from 'openai'
+// @ts-expect-error pdf-parse has no type declarations
+import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 import { PATIENT, getAge } from '@/lib/patient'
 
 // Модель Claude через OpenRouter
@@ -314,23 +316,75 @@ async function analyzeImage(
 }
 
 /**
+ * Анализирует извлечённый текст документа (без Vision).
+ * Используется когда PDF содержит текстовый/OCR-слой.
+ */
+async function analyzeText(text: string): Promise<AnalysisResult> {
+  // Ограничиваем текст ~30000 символов (~10000 токенов)
+  const truncatedText = text.length > 30000
+    ? text.substring(0, 30000) + '\n\n[...текст обрезан...]'
+    : text
+
+  const completion = await getOpenRouter().chat.completions.create({
+    model: MODEL,
+    max_tokens: 4000,
+    messages: [
+      {
+        role: 'user',
+        content: `Текст медицинского документа:\n\n${truncatedText}\n\n${ANALYSIS_PROMPT}`,
+      },
+    ],
+  })
+
+  const textContent = completion.choices[0]?.message?.content
+  if (!textContent) {
+    throw new Error('No response from OpenRouter')
+  }
+
+  return parseAnalysisJson(textContent)
+}
+
+/**
  * Анализирует PDF через OpenRouter.
- * Конвертируем PDF в base64 и отправляем как file URL.
- * Args:
- *   pdfUrl (string): URL PDF.
- * Returns:
- *   AnalysisResult: Результат анализа.
+ * Стратегия: сначала извлечь текст (быстро, работает для OCR-PDF из AnyScanner и т.п.),
+ * если текста нет — отправить как base64 (Vision), но с ограничением по размеру.
  */
 async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
-  // Скачиваем PDF и конвертируем в base64 data URL
   const response = await fetch(pdfUrl)
   const arrayBuffer = await response.arrayBuffer()
-  const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const buffer = Buffer.from(arrayBuffer)
+  const sizeMB = buffer.length / (1024 * 1024)
+
+  // 1. Попытка извлечь текст из PDF (OCR-слой)
+  try {
+    const pdfData = await pdfParse(buffer)
+    const text = pdfData.text?.trim()
+
+    if (text && text.length > 200) {
+      console.log(`PDF text extracted: ${text.length} chars (${sizeMB.toFixed(1)} MB), using text-only analysis`)
+      return analyzeText(text)
+    }
+    console.log(`PDF text too short (${text?.length || 0} chars), falling back to vision`)
+  } catch (err) {
+    console.log('PDF text extraction failed:', err instanceof Error ? err.message : err)
+  }
+
+  // 2. Проверка размера для vision-подхода (base64 увеличивает на ~33%)
+  if (sizeMB > 4.5) {
+    throw new Error(
+      `PDF слишком большой для визуального анализа (${sizeMB.toFixed(1)} МБ) и не содержит текстового слоя. ` +
+      `Попробуйте отправить как отдельные фото через «📎 Много фото» или разбейте PDF на части поменьше.`
+    )
+  }
+
+  // 3. Vision-подход для небольших PDF без текста
+  console.log(`Using vision analysis for PDF (${sizeMB.toFixed(1)} MB)`)
+  const base64 = buffer.toString('base64')
   const dataUrl = `data:application/pdf;base64,${base64}`
 
   const completion = await getOpenRouter().chat.completions.create({
     model: MODEL,
-    max_tokens: 3000,
+    max_tokens: 4000,
     messages: [
       {
         role: 'user',
