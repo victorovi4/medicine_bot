@@ -1,6 +1,4 @@
 import OpenAI from 'openai'
-// @ts-expect-error pdf-parse has no type declarations
-import pdfParse from 'pdf-parse/lib/pdf-parse.js'
 import { PATIENT, getAge } from '@/lib/patient'
 
 // Модель Claude через OpenRouter
@@ -357,6 +355,8 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
 
   // 1. Попытка извлечь текст из PDF (OCR-слой)
   try {
+    // Динамический импорт: pdf-parse не совместим со статическим импортом в Turbopack
+    const pdfParse = (await import('pdf-parse')).default
     const pdfData = await pdfParse(buffer)
     const text = pdfData.text?.trim()
 
