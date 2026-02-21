@@ -355,31 +355,41 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
 
   // 1. Попытка извлечь текст из PDF (OCR-слой)
   try {
-    // Динамический импорт: pdf-parse не совместим со статическим импортом в Turbopack
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pdfParseModule = await import('pdf-parse') as any
-    const pdfParse = pdfParseModule.default ?? pdfParseModule
-    const pdfData = await pdfParse(buffer)
-    const text = pdfData.text?.trim()
-
-    if (text && text.length > 200) {
-      console.log(`PDF text extracted: ${text.length} chars (${sizeMB.toFixed(1)} MB), using text-only analysis`)
-      return analyzeText(text)
+    // pdf-parse v2 exports { PDFParse } class; v1 exports default function
+    let text = ''
+    if (pdfParseModule.PDFParse) {
+      // v2 API: new PDFParse(uint8array) → .getText() → { text, pages, total }
+      const parser = new pdfParseModule.PDFParse(new Uint8Array(buffer))
+      const result = await parser.getText()
+      text = (typeof result === 'string' ? result : result?.text ?? '').trim()
+    } else {
+      // v1 API: pdfParse(buffer) → { text, numpages, ... }
+      const pdfParse = pdfParseModule.default ?? pdfParseModule
+      const pdfData = await pdfParse(buffer)
+      text = (pdfData.text ?? '').trim()
     }
-    console.log(`PDF text too short (${text?.length || 0} chars), falling back to vision`)
+
+    // Фильтруем фейковый текст (AnyScanner добавляет только водяной знак "AnyScanner")
+    const cleanText = text.replace(/AnyScanner/gi, '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '').trim()
+
+    if (cleanText && cleanText.length > 200) {
+      console.log(`PDF text extracted: ${cleanText.length} chars (${sizeMB.toFixed(1)} MB), using text-only analysis`)
+      return analyzeText(cleanText)
+    }
+    console.log(`PDF text too short after cleanup (${cleanText?.length || 0} chars), falling back to vision`)
   } catch (err) {
     console.log('PDF text extraction failed:', err instanceof Error ? err.message : err)
   }
 
-  // 2. Проверка размера для vision-подхода (base64 увеличивает на ~33%)
+  // 2. Для больших PDF — разбить на отдельные страницы и отправить через Vision
   if (sizeMB > 4.5) {
-    throw new Error(
-      `PDF слишком большой для визуального анализа (${sizeMB.toFixed(1)} МБ) и не содержит текстового слоя. ` +
-      `Попробуйте отправить как отдельные фото через «📎 Много фото» или разбейте PDF на части поменьше.`
-    )
+    console.log(`PDF too large for single Vision request (${sizeMB.toFixed(1)} MB), splitting into pages...`)
+    return analyzePdfByPages(buffer)
   }
 
-  // 3. Vision-подход для небольших PDF без текста
+  // 3. Vision-подход для небольших PDF без текста (< 4.5 MB)
   console.log(`Using vision analysis for PDF (${sizeMB.toFixed(1)} MB)`)
   const base64 = buffer.toString('base64')
   const dataUrl = `data:application/pdf;base64,${base64}`
@@ -403,6 +413,68 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
             text: ANALYSIS_PROMPT,
           },
         ],
+      },
+    ],
+  })
+
+  const textContent = completion.choices[0]?.message?.content
+  if (!textContent) {
+    throw new Error('No response from OpenRouter')
+  }
+
+  return parseAnalysisJson(textContent)
+}
+
+/**
+ * Разбивает большой PDF на отдельные страницы и отправляет через Vision API.
+ * Используется для image-only PDF (AnyScanner и т.п.) > 4.5 MB.
+ */
+async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
+  const { PDFDocument } = await import('pdf-lib')
+  const pdfDoc = await PDFDocument.load(new Uint8Array(buffer))
+  const pageCount = pdfDoc.getPageCount()
+
+  // Ограничиваем до 15 страниц чтобы не превысить лимит запроса
+  const maxPages = Math.min(pageCount, 15)
+  console.log(`Splitting PDF: ${pageCount} pages, processing ${maxPages}`)
+
+  const pageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+
+  for (let i = 0; i < maxPages; i++) {
+    const singleDoc = await PDFDocument.create()
+    const [copiedPage] = await singleDoc.copyPages(pdfDoc, [i])
+    singleDoc.addPage(copiedPage)
+    const pageBytes = await singleDoc.save()
+    const pageBase64 = Buffer.from(pageBytes).toString('base64')
+    const pageDataUrl = `data:application/pdf;base64,${pageBase64}`
+
+    pageContents.push({
+      type: 'file',
+      file: {
+        filename: `page_${i + 1}.pdf`,
+        file_data: pageDataUrl,
+      },
+    } as OpenAI.Chat.Completions.ChatCompletionContentPart)
+  }
+
+  const multiPagePrompt = pageCount > maxPages
+    ? `Это многостраничный медицинский документ (${pageCount} страниц, показаны первые ${maxPages}).\nПроанализируй ВСЕ показанные страницы как ОДИН документ.\n\n${ANALYSIS_PROMPT}`
+    : `Это многостраничный медицинский документ из ${pageCount} страниц.\nПроанализируй ВСЕ страницы как ОДИН документ и извлеки информацию.\n\n${ANALYSIS_PROMPT}`
+
+  pageContents.push({
+    type: 'text',
+    text: multiPagePrompt,
+  })
+
+  console.log(`Sending ${maxPages} page PDFs to Vision API...`)
+
+  const completion = await getOpenRouter().chat.completions.create({
+    model: MODEL,
+    max_tokens: 4000,
+    messages: [
+      {
+        role: 'user',
+        content: pageContents,
       },
     ],
   })
