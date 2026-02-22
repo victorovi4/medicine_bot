@@ -3,6 +3,8 @@
  * Нормы, единицы измерения, цвета для графиков.
  */
 
+import { PATIENT } from '@/lib/patient'
+
 export interface MetricConfig {
   name: string           // Название показателя
   aliases: string[]      // Альтернативные названия для парсинга
@@ -57,12 +59,76 @@ export const METRICS_CONFIG: Record<string, MetricConfig> = {
     color: '#f59e0b', // Янтарный — маркер воспаления
     description: 'C-реактивный белок — маркер воспаления',
   },
+  'Парапротеин': {
+    name: 'Парапротеин',
+    aliases: ['М-градиент', 'M-protein', 'М-белок', 'M-градиент', 'Парапротеин (М-градиент)', 'M-spike'],
+    unit: 'г/л',
+    normalMin: 0,
+    normalMax: 0,
+    color: '#8b5cf6', // Фиолетовый — маркер миеломы
+    description: 'Парапротеин (М-градиент) — маркер множественной миеломы',
+  },
+  'Глюкоза': {
+    name: 'Глюкоза',
+    aliases: ['Glucose', 'Сахар крови', 'GLU', 'Глюкоза крови', 'Глюкоза натощак'],
+    unit: 'ммоль/л',
+    normalMin: 3.9,
+    normalMax: 6.1,
+    color: '#10b981', // Зелёный
+    description: 'Уровень глюкозы в крови',
+  },
+  'Гликированный гемоглобин': {
+    name: 'Гликированный гемоглобин',
+    aliases: ['HbA1c', 'A1c', 'Гликозилированный гемоглобин', 'Glycated hemoglobin'],
+    unit: '%',
+    normalMin: 4.0,
+    normalMax: 6.0,
+    color: '#06b6d4', // Циан
+    description: 'Гликированный гемоглобин (HbA1c) — контроль диабета',
+  },
+  'Тромбоциты': {
+    name: 'Тромбоциты',
+    aliases: ['PLT', 'Platelets', 'Тромб.', 'Тромбоц.'],
+    unit: '×10⁹/л',
+    normalMin: 150,
+    normalMax: 400,
+    color: '#ec4899', // Розовый
+    description: 'Количество тромбоцитов в крови',
+  },
+  'Лейкоциты': {
+    name: 'Лейкоциты',
+    aliases: ['WBC', 'Leukocytes', 'Лейкоц.', 'Лейк.', 'White blood cells'],
+    unit: '×10⁹/л',
+    normalMin: 4.0,
+    normalMax: 9.0,
+    color: '#14b8a6', // Тил
+    description: 'Количество лейкоцитов в крови',
+  },
 }
 
 /**
  * Список всех отслеживаемых показателей.
  */
 export const TRACKED_METRICS = Object.keys(METRICS_CONFIG)
+
+/**
+ * Возвращает подмножество METRICS_CONFIG на основе PATIENT.trackingMetrics.
+ * Если trackingMetrics пуст или ни одна метрика не найдена — возвращает полный METRICS_CONFIG.
+ * Используется в API /api/metrics для фильтрации отображаемых графиков.
+ * extractMeasurements() продолжает работать с полным METRICS_CONFIG —
+ * документы сохраняют ВСЕ найденные метрики, фильтрация только при отображении.
+ */
+export function getActiveMetricsConfig(): Record<string, MetricConfig> {
+  const tracked = PATIENT.trackingMetrics
+  if (tracked.length === 0) return METRICS_CONFIG
+  const active: Record<string, MetricConfig> = {}
+  for (const metricName of tracked) {
+    if (METRICS_CONFIG[metricName]) {
+      active[metricName] = METRICS_CONFIG[metricName]
+    }
+  }
+  return Object.keys(active).length > 0 ? active : METRICS_CONFIG
+}
 
 /**
  * Получить конфиг метрики по названию (с учётом алиасов).

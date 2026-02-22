@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
 import { getTreatmentStartDate } from '@/lib/patient'
-import { METRICS_CONFIG, calculateChange, getValueStatus } from '@/lib/metrics'
+import { getActiveMetricsConfig, calculateChange, getValueStatus } from '@/lib/metrics'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -115,7 +115,8 @@ export async function GET(request: NextRequest) {
     // Формируем сводку для каждого показателя
     const metrics: MetricSummary[] = []
     
-    for (const [name, config] of Object.entries(METRICS_CONFIG)) {
+    const activeMetrics = getActiveMetricsConfig()
+    for (const [name, config] of Object.entries(activeMetrics)) {
       const dataPoints = grouped[name] || []
       
       let firstValue: number | null = null

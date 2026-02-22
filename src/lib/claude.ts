@@ -488,6 +488,27 @@ async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
 }
 
 /**
+ * Извлекает первый полный JSON-объект из текста с помощью balanced brace matching.
+ * В отличие от greedy regex /\{[\s\S]*\}/, корректно находит конец первого объекта,
+ * не захватывая мусор после закрывающей скобки.
+ */
+function extractJsonObject(text: string): string | null {
+  const startIdx = text.indexOf('{')
+  if (startIdx === -1) return null
+  let depth = 0, inString = false, escape = false
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '{') depth++
+    if (ch === '}') { depth--; if (depth === 0) return text.substring(startIdx, i + 1) }
+  }
+  return null
+}
+
+/**
  * Парсит JSON-ответ от модели.
  * Args:
  *   rawText (string): Текст ответа.
@@ -497,9 +518,9 @@ async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
 function parseAnalysisJson(rawText: string): AnalysisResult {
   console.log('Raw AI response length:', rawText.length)
   console.log('Raw AI response (first 500 chars):', rawText.substring(0, 500))
-  
+
   let jsonStr = rawText.trim()
-  
+
   // Убираем возможные markdown-обёртки
   if (jsonStr.startsWith('```json')) {
     jsonStr = jsonStr.slice(7)
@@ -522,11 +543,11 @@ function parseAnalysisJson(rawText: string): AnalysisResult {
     console.log('Direct parse failed, trying to extract JSON...')
   }
 
-  // Попытка 2: найти JSON объект в тексте
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-  if (jsonMatch) {
+  // Попытка 2: balanced brace extraction — находит первый полный JSON-объект
+  const extracted = extractJsonObject(rawText)
+  if (extracted) {
     try {
-      const parsed = JSON.parse(jsonMatch[0])
+      const parsed = JSON.parse(extracted)
       if (!Array.isArray(parsed.recommendations)) {
         parsed.recommendations = []
       }
@@ -539,7 +560,7 @@ function parseAnalysisJson(rawText: string): AnalysisResult {
 
   // Попытка 3: вернуть базовый результат с текстом как summary
   console.error('All JSON parse attempts failed. Raw text:', rawText.substring(0, 1000))
-  
+
   return {
     category: 'другое',
     subtype: 'другое',

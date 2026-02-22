@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   METRICS_CONFIG,
   TRACKED_METRICS,
   getMetricConfig,
   getCanonicalMetricName,
+  getActiveMetricsConfig,
   parseValueWithUnit,
   extractMeasurements,
   getValueStatus,
@@ -16,6 +17,12 @@ describe('METRICS_CONFIG', () => {
     expect(METRICS_CONFIG['ПСА общий']).toBeDefined()
     expect(METRICS_CONFIG['ПСА свободный']).toBeDefined()
     expect(METRICS_CONFIG['Гемоглобин']).toBeDefined()
+    expect(METRICS_CONFIG['СРБ']).toBeDefined()
+    expect(METRICS_CONFIG['Парапротеин']).toBeDefined()
+    expect(METRICS_CONFIG['Глюкоза']).toBeDefined()
+    expect(METRICS_CONFIG['Гликированный гемоглобин']).toBeDefined()
+    expect(METRICS_CONFIG['Тромбоциты']).toBeDefined()
+    expect(METRICS_CONFIG['Лейкоциты']).toBeDefined()
   })
 
   it('каждый показатель должен иметь обязательные поля', () => {
@@ -34,6 +41,29 @@ describe('METRICS_CONFIG', () => {
     expect(TRACKED_METRICS).toHaveLength(Object.keys(METRICS_CONFIG).length)
     expect(TRACKED_METRICS).toContain('ПСА общий')
     expect(TRACKED_METRICS).toContain('Гемоглобин')
+    expect(TRACKED_METRICS).toContain('Парапротеин')
+    expect(TRACKED_METRICS).toContain('Лейкоциты')
+  })
+})
+
+describe('getActiveMetricsConfig', () => {
+  it('по умолчанию (Иоффе) возвращает подмножество из trackingMetrics', () => {
+    // Default PATIENT.trackingMetrics = ['ПСА общий', 'ПСА свободный', 'Гемоглобин', 'СРБ']
+    const active = getActiveMetricsConfig()
+    const keys = Object.keys(active)
+    expect(keys).toContain('ПСА общий')
+    expect(keys).toContain('Гемоглобин')
+    // Не должен содержать метрики, не входящие в trackingMetrics по умолчанию
+    expect(keys).not.toContain('Парапротеин')
+    expect(keys).not.toContain('Глюкоза')
+  })
+
+  it('должен возвращать только метрики из PATIENT.trackingMetrics', () => {
+    // Проверяем что все возвращённые метрики есть в METRICS_CONFIG
+    const active = getActiveMetricsConfig()
+    for (const key of Object.keys(active)) {
+      expect(METRICS_CONFIG[key]).toBeDefined()
+    }
   })
 })
 
@@ -49,6 +79,14 @@ describe('getMetricConfig', () => {
     expect(getMetricConfig('Hb')?.name).toBe('Гемоглобин')
     expect(getMetricConfig('PSA')?.name).toBe('ПСА общий')
     expect(getMetricConfig('fPSA')?.name).toBe('ПСА свободный')
+    // Новые метрики
+    expect(getMetricConfig('М-градиент')?.name).toBe('Парапротеин')
+    expect(getMetricConfig('M-protein')?.name).toBe('Парапротеин')
+    expect(getMetricConfig('GLU')?.name).toBe('Глюкоза')
+    expect(getMetricConfig('Сахар крови')?.name).toBe('Глюкоза')
+    expect(getMetricConfig('HbA1c')?.name).toBe('Гликированный гемоглобин')
+    expect(getMetricConfig('PLT')?.name).toBe('Тромбоциты')
+    expect(getMetricConfig('WBC')?.name).toBe('Лейкоциты')
   })
 
   it('должен быть регистронезависимым', () => {
