@@ -31,6 +31,17 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
+ * Возвращает базовый URL приложения.
+ * Приоритет: NEXT_PUBLIC_APP_URL → VERCEL_PROJECT_PRODUCTION_URL → VERCEL_URL → localhost.
+ */
+function getAppBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+  return 'http://localhost:3000'
+}
+
+/**
  * Форматирует понятное имя файла для загрузок без оригинального имени.
  * Вместо telegram-1769396799832.jpg будет "Загрузка 26.01.2026 13-45.jpg"
  */
@@ -85,7 +96,7 @@ export async function POST(request: NextRequest) {
           `Я помогаю вести медицинскую карту.\n\n` +
           `📄 Отправьте фото или PDF — документ добавится в карту.\n\n` +
           `📋 Дневник — запись симптомов, показателей, лекарств.\n\n` +
-          `🔗 Карта: ${process.env.NEXT_PUBLIC_APP_URL}`,
+          `🔗 Карта: ${getAppBaseUrl()}`,
         { reply_markup: MAIN_KEYBOARD }
       )
       return NextResponse.json({ ok: true })
@@ -118,7 +129,7 @@ export async function POST(request: NextRequest) {
         const lastDate = new Date(lastDoc.createdAt).toLocaleDateString('ru-RU')
         text += `📅 Последний: ${lastDate}\n   "${lastDoc.title}"`
       }
-      text += `\n\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}`
+      text += `\n\n🔗 ${getAppBaseUrl()}`
 
       await sendMessage(chatId, text)
       return NextResponse.json({ ok: true })
@@ -135,7 +146,7 @@ export async function POST(request: NextRequest) {
         const date = new Date(doc.date).toLocaleDateString('ru-RU')
         text += `• ${date} — ${doc.title}\n`
       }
-      text += `\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}`
+      text += `\n🔗 ${getAppBaseUrl()}`
 
       await sendMessage(chatId, text)
       return NextResponse.json({ ok: true })
@@ -765,7 +776,7 @@ async function checkDuplicatesAndSave(
     })
 
     const dupDate = new Date(duplicate.date).toLocaleDateString('ru-RU')
-    const dupUrl = `${process.env.NEXT_PUBLIC_APP_URL}/documents/${duplicate.id}`
+    const dupUrl = `${getAppBaseUrl()}/documents/${duplicate.id}`
 
     const { message_id } = await sendMessage(
       chatId,
@@ -1010,7 +1021,7 @@ async function handleCallbackQuery(
       `✅ Документ добавлен!\n\n` +
         `📋 ${docData.title}\n` +
         `📅 ${docData.date?.split('T')[0]}\n\n` +
-        `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${document.id}`
+        `🔗 ${getAppBaseUrl()}/documents/${document.id}`
     )
     // Отправляем сообщение с клавиатурой
     await sendMessage(chatId, '📂 Готов к новым документам!', { reply_markup: MAIN_KEYBOARD })
@@ -1072,7 +1083,7 @@ async function handleCallbackQuery(
       `🔄 Документ обновлён!\n\n` +
         `📋 ${docData.title}\n` +
         `📅 ${docData.date?.split('T')[0]}\n\n` +
-        `🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${pending.duplicateId}`
+        `🔗 ${getAppBaseUrl()}/documents/${pending.duplicateId}`
     )
     
     // Отправляем сообщение с клавиатурой
@@ -1143,7 +1154,7 @@ async function sendSuccessMessage(
     response += `\n🤖 AI: ${shortSummary}\n`
   }
 
-  response += `\n🔗 ${process.env.NEXT_PUBLIC_APP_URL}/documents/${documentId}`
+  response += `\n🔗 ${getAppBaseUrl()}/documents/${documentId}`
 
   await sendMessage(chatId, response, { reply_markup: MAIN_KEYBOARD })
 }
@@ -1173,7 +1184,7 @@ async function generateExtract(chatId: number): Promise<void> {
     const toDate = today.toISOString().split('T')[0]
 
     // Вызываем API
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const baseUrl = getAppBaseUrl()
     const response = await fetch(`${baseUrl}/api/extract`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1231,7 +1242,7 @@ async function generateExtract(chatId: number): Promise<void> {
     const msg = error instanceof Error ? error.message : 'Неизвестная ошибка'
     await sendMessage(
       chatId,
-      `❌ Ошибка генерации выписки: ${msg}\n\nПопробуйте на сайте: ${process.env.NEXT_PUBLIC_APP_URL}/extract`,
+      `❌ Ошибка генерации выписки: ${msg}\n\nПопробуйте на сайте: ${getAppBaseUrl()}/extract`,
       { reply_markup: MAIN_KEYBOARD }
     )
   }
