@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { PatientHeader } from '@/components/PatientHeader'
 import { MetricsGrid } from '@/components/MetricsChart'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -174,8 +173,7 @@ export default function ExtractPage() {
   
   if (loading) {
     return (
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <PatientHeader />
+      <main className="container mx-auto px-4 pb-8 max-w-4xl">
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           <span className="ml-3 text-gray-600">Загрузка выписки...</span>
@@ -185,11 +183,7 @@ export default function ExtractPage() {
   }
   
   return (
-    <main className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="print:hidden">
-        <PatientHeader />
-      </div>
-      
+    <main className="container mx-auto px-4 pb-8 max-w-4xl">
       <div className="mb-6 flex items-center justify-between print:hidden">
         <div>
           <h2 className="text-xl font-semibold">Выписка из истории болезни</h2>
