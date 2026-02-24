@@ -748,7 +748,7 @@ async function checkDuplicatesAndSave(
     summary: analysis.summary,
     conclusion: analysis.conclusion,
     recommendations: analysis.recommendations || [],
-    content: caption || (pageCount > 1 ? `Документ из ${pageCount} страниц` : null),
+    content: analysis.fullText || caption || (pageCount > 1 ? `Документ из ${pageCount} страниц` : null),
     fileUrl,
     // Если нет оригинального имени (фото), создаём понятное имя с датой/временем
     fileName: fileName || formatUploadFileName(new Date()),
@@ -855,12 +855,24 @@ async function checkDuplicatesAndSave(
         keyValues: documentData.keyValues,
         // Создаём связанные измерения
         measurements: {
-          create: allMeasurements.map(m => ({
-            name: m.name,
-            value: m.value,
-            unit: m.unit,
-            date: m.date,
-          })),
+          create: allMeasurements.map(m => {
+            const base = {
+              name: m.name,
+              value: m.value,
+              unit: m.unit,
+              date: 'date' in m ? (m as { date: Date }).date : docDate,
+            }
+            // Добавляем normalMin/normalMax/isAbnormal если есть (из extractMeasurements)
+            if ('normalMin' in m) {
+              return {
+                ...base,
+                normalMin: (m as { normalMin?: number }).normalMin,
+                normalMax: (m as { normalMax?: number }).normalMax,
+                isAbnormal: (m as { isAbnormal?: boolean }).isAbnormal,
+              }
+            }
+            return base
+          }),
         },
       },
     })
@@ -982,7 +994,7 @@ async function handleCallbackQuery(
     // Извлекаем измерения из keyValues
     const docDate = new Date(docData.date)
     const measurements = extractMeasurements(docData.keyValues as Record<string, string> | null)
-    
+
     const document = await prisma.document.create({
       data: {
         date: docDate,
@@ -1008,6 +1020,9 @@ async function handleCallbackQuery(
             value: m.value,
             unit: m.unit,
             date: docDate,
+            normalMin: m.normalMin,
+            normalMax: m.normalMax,
+            isAbnormal: m.isAbnormal,
           })),
         },
       },

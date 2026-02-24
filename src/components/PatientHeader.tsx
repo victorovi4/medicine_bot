@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { PATIENT, getFullName, getAge, getFormattedBirthDate, getFormattedTreatmentStartDate } from '@/lib/patient'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { FileText } from 'lucide-react'
+import { FileText, MessageSquare } from 'lucide-react'
 
 export function PatientHeader() {
   const hasComorbidities = PATIENT.comorbidities.length > 0
@@ -52,14 +52,23 @@ export function PatientHeader() {
           <div className="text-right space-y-2">
             <p className="text-sm font-medium text-blue-800">Медицинская карта</p>
             
-            {/* Ссылка на выписку */}
-            <Link 
-              href="/extract" 
-              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
-            >
-              <FileText className="h-4 w-4" />
-              <span>Резюме (027/у)</span>
-            </Link>
+            {/* Ссылки */}
+            <div className="flex flex-col gap-1">
+              <Link
+                href="/chat"
+                className="inline-flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 hover:underline"
+              >
+                <MessageSquare className="h-4 w-4" />
+                <span>Консультация ИИ</span>
+              </Link>
+              <Link
+                href="/extract"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+              >
+                <FileText className="h-4 w-4" />
+                <span>Резюме (027/у)</span>
+              </Link>
+            </div>
             
             {/* Период лечения */}
             <p className="text-xs text-gray-500">

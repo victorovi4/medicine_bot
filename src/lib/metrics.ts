@@ -164,23 +164,26 @@ export function getCanonicalMetricName(name: string): string | null {
 }
 
 /**
- * Парсит строку вида "4.5 нг/мл" в { value, unit }.
+ * Парсит строку вида "4.5 нг/мл" или "130 г/л [130-160]" в { value, unit, normalMin, normalMax }.
  */
-export function parseValueWithUnit(str: string): { value: number; unit: string } | null {
+export function parseValueWithUnit(str: string): {
+  value: number; unit: string; normalMin?: number; normalMax?: number
+} | null {
   if (!str) return null
-  
-  // Паттерн: число (возможно с запятой/точкой) + опционально единицы
-  const match = str.match(/^([\d.,]+)\s*(.*)$/)
+
+  // Паттерн: число единицы [норма: мин-макс] или [мин-макс]
+  const match = str.match(/^([\d.,]+)\s*([^[\]]*?)(?:\s*\[(?:норма:\s*)?([\d.,]+)\s*[-–]\s*([\d.,]+)\])?$/)
   if (!match) return null
-  
+
   // Заменяем запятую на точку для парсинга
-  const valueStr = match[1].replace(',', '.')
-  const value = parseFloat(valueStr)
-  
+  const value = parseFloat(match[1].replace(',', '.'))
   if (isNaN(value)) return null
-  
+
   const unit = match[2].trim() || ''
-  return { value, unit }
+  const normalMin = match[3] ? parseFloat(match[3].replace(',', '.')) : undefined
+  const normalMax = match[4] ? parseFloat(match[4].replace(',', '.')) : undefined
+
+  return { value, unit, normalMin, normalMax }
 }
 
 /**
@@ -210,40 +213,52 @@ function validateAndCorrectValue(
 
 /**
  * Извлекает измерения из keyValues документа.
- * Возвращает массив { name, value, unit } для отслеживаемых показателей.
+ * Возвращает массив { name, value, unit, normalMin, normalMax, isAbnormal } для отслеживаемых показателей.
  * Включает валидацию и автокоррекцию очевидных ошибок OCR.
  */
 export function extractMeasurements(
   keyValues: Record<string, string> | null | undefined
-): Array<{ name: string; value: number; unit: string }> {
+): Array<{ name: string; value: number; unit: string; normalMin?: number; normalMax?: number; isAbnormal?: boolean }> {
   if (!keyValues || typeof keyValues !== 'object') {
     return []
   }
-  
-  const measurements: Array<{ name: string; value: number; unit: string }> = []
-  
+
+  const measurements: Array<{ name: string; value: number; unit: string; normalMin?: number; normalMax?: number; isAbnormal?: boolean }> = []
+
   for (const [key, valueStr] of Object.entries(keyValues)) {
     // Проверяем, отслеживаем ли мы этот показатель
     const canonicalName = getCanonicalMetricName(key)
     if (!canonicalName) continue
-    
+
     const config = METRICS_CONFIG[canonicalName]
     if (!config) continue
-    
+
     // Парсим значение
     const parsed = parseValueWithUnit(valueStr)
     if (!parsed) continue
-    
+
     // Валидируем и корректируем значение
     const { value: correctedValue } = validateAndCorrectValue(canonicalName, parsed.value)
-    
+
+    // Определяем normalMin/normalMax: приоритет — из документа, затем из конфига
+    const normalMin = parsed.normalMin ?? config.normalMin
+    const normalMax = parsed.normalMax ?? config.normalMax
+
+    // Определяем, выходит ли за пределы нормы
+    const isAbnormal = normalMin !== undefined && normalMax !== undefined
+      ? correctedValue < normalMin || correctedValue > normalMax
+      : undefined
+
     measurements.push({
       name: canonicalName,
       value: correctedValue,
       unit: parsed.unit || config.unit,
+      normalMin,
+      normalMax,
+      isAbnormal,
     })
   }
-  
+
   return measurements
 }
 

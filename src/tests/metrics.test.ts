@@ -115,19 +115,40 @@ describe('getCanonicalMetricName', () => {
 
 describe('parseValueWithUnit', () => {
   it('должен парсить значения с единицами', () => {
-    expect(parseValueWithUnit('130 г/л')).toEqual({ value: 130, unit: 'г/л' })
-    expect(parseValueWithUnit('4.5 нг/мл')).toEqual({ value: 4.5, unit: 'нг/мл' })
-    expect(parseValueWithUnit('120 мм/ч')).toEqual({ value: 120, unit: 'мм/ч' })
+    expect(parseValueWithUnit('130 г/л')).toMatchObject({ value: 130, unit: 'г/л' })
+    expect(parseValueWithUnit('4.5 нг/мл')).toMatchObject({ value: 4.5, unit: 'нг/мл' })
+    expect(parseValueWithUnit('120 мм/ч')).toMatchObject({ value: 120, unit: 'мм/ч' })
   })
 
   it('должен парсить значения с запятой', () => {
-    expect(parseValueWithUnit('4,5 нг/мл')).toEqual({ value: 4.5, unit: 'нг/мл' })
-    expect(parseValueWithUnit('9,2 г/л')).toEqual({ value: 9.2, unit: 'г/л' })
+    expect(parseValueWithUnit('4,5 нг/мл')).toMatchObject({ value: 4.5, unit: 'нг/мл' })
+    expect(parseValueWithUnit('9,2 г/л')).toMatchObject({ value: 9.2, unit: 'г/л' })
   })
 
   it('должен парсить значения без единиц', () => {
-    expect(parseValueWithUnit('130')).toEqual({ value: 130, unit: '' })
-    expect(parseValueWithUnit('4.5')).toEqual({ value: 4.5, unit: '' })
+    expect(parseValueWithUnit('130')).toMatchObject({ value: 130, unit: '' })
+    expect(parseValueWithUnit('4.5')).toMatchObject({ value: 4.5, unit: '' })
+  })
+
+  it('должен парсить значения с референсными нормами', () => {
+    const result = parseValueWithUnit('130 г/л [130-160]')
+    expect(result).toMatchObject({ value: 130, unit: 'г/л', normalMin: 130, normalMax: 160 })
+  })
+
+  it('должен парсить значения с "норма:" префиксом', () => {
+    const result = parseValueWithUnit('25 мм/ч [норма: 2-15]')
+    expect(result).toMatchObject({ value: 25, unit: 'мм/ч', normalMin: 2, normalMax: 15 })
+  })
+
+  it('должен парсить значения с en-dash в нормах', () => {
+    const result = parseValueWithUnit('4,5 нг/мл [0–4]')
+    expect(result).toMatchObject({ value: 4.5, unit: 'нг/мл', normalMin: 0, normalMax: 4 })
+  })
+
+  it('должен возвращать undefined для normalMin/normalMax без норм', () => {
+    const result = parseValueWithUnit('130 г/л')
+    expect(result?.normalMin).toBeUndefined()
+    expect(result?.normalMax).toBeUndefined()
   })
 
   it('должен возвращать null для пустых строк', () => {
@@ -148,7 +169,7 @@ describe('extractMeasurements', () => {
     }
     const result = extractMeasurements(keyValues)
     expect(result).toHaveLength(1)
-    expect(result[0]).toEqual({
+    expect(result[0]).toMatchObject({
       name: 'Гемоглобин',
       value: 130,
       unit: 'г/л',

@@ -1,38 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import OpenAI from 'openai'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
 import { PATIENT, getFullName, getAge, getFormattedBirthDate, getTreatmentStartDate } from '@/lib/patient'
 import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
+import { generateWithClaude } from '@/lib/claude'
 import type { Prisma } from '@prisma/client'
 
 type DocumentModel = Prisma.DocumentGetPayload<object>
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-// Модель Claude через OpenRouter
-const MODEL = 'anthropic/claude-sonnet-4'
-
-// Ленивая инициализация клиента
-let _openrouter: OpenAI | null = null
-
-function getOpenRouter(): OpenAI {
-  if (!_openrouter) {
-    if (!process.env.OPENROUTER_API_KEY) {
-      throw new Error('OPENROUTER_API_KEY is not configured')
-    }
-    _openrouter = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
-      defaultHeaders: {
-        'HTTP-Referer': process.env.VERCEL_URL || 'http://localhost:3000',
-        'X-Title': 'Medical Card - Extract',
-      },
-    })
-  }
-  return _openrouter
-}
 
 export interface ExtractData {
   patient: {
@@ -272,22 +249,11 @@ export async function POST(request: NextRequest) {
       return text
     }).join('\n---\n')
     
-    // Запрос к Claude через OpenRouter
-    const completion = await getOpenRouter().chat.completions.create({
-      model: MODEL,
-      max_tokens: 4000,
-      messages: [
-        {
-          role: 'user',
-          content: `${EXTRACT_PROMPT}\n\n## Период выписки\nС ${fromDate} по ${toDate}\n\n## Медицинские документы (${documents.length} шт.)\n${documentsText}`,
-        },
-      ],
-    })
-    
-    const textContent = completion.choices[0]?.message?.content
-    if (!textContent) {
-      throw new Error('Нет ответа от AI')
-    }
+    // Запрос к Claude через Anthropic SDK
+    const textContent = await generateWithClaude(
+      `${EXTRACT_PROMPT}\n\n## Период выписки\nС ${fromDate} по ${toDate}\n\n## Медицинские документы (${documents.length} шт.)\n${documentsText}`,
+      { maxTokens: 4096 }
+    )
     
     // Парсим JSON
     let extractContent

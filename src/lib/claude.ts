@@ -1,27 +1,21 @@
-import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 import { PATIENT, getAge } from '@/lib/patient'
 
-// Модель Claude через OpenRouter
-const MODEL = 'anthropic/claude-sonnet-4'
+// Модели
+const ANALYSIS_MODEL = 'claude-sonnet-4-6-20250514'    // для анализа документов
+export const CHAT_MODEL = 'claude-sonnet-4-6-20250514'  // для чата (Этап 2)
 
-// Ленивая инициализация клиента (чтобы не падать при билде)
-let _openrouter: OpenAI | null = null
+// Ленивая инициализация клиента
+let _client: Anthropic | null = null
 
-function getOpenRouter(): OpenAI {
-  if (!_openrouter) {
-    if (!process.env.OPENROUTER_API_KEY) {
-      throw new Error('OPENROUTER_API_KEY is not configured')
+function getClient(): Anthropic {
+  if (!_client) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('ANTHROPIC_API_KEY is not configured')
     }
-    _openrouter = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY,
-      defaultHeaders: {
-        'HTTP-Referer': process.env.VERCEL_URL || 'http://localhost:3000',
-        'X-Title': 'Medical Card',
-      },
-    })
+    _client = new Anthropic()  // читает ANTHROPIC_API_KEY из env
   }
-  return _openrouter
+  return _client
 }
 
 export interface ProcedureInfo {
@@ -64,6 +58,7 @@ export interface AnalysisResult {
   // Новые поля
   procedures?: ProcedureInfo[]           // Проведённые процедуры
   measurementsDynamics?: MeasurementDynamics[]  // Динамика показателей
+  fullText?: string  // Полная расшифровка документа
 }
 
 const ANALYSIS_PROMPT = `Ты — медицинский ассистент, анализирующий медицинские документы на русском языке.
@@ -81,7 +76,7 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
    - "консультация" — заключение врача, осмотр
    - "выписка" — выписной эпикриз
    - "направление" — направление на обследование/госпитализацию
-   
+
    Для категории "анализы":
    - "кровь" — общий анализ крови, клинический анализ
    - "биохимия" — биохимический анализ крови
@@ -89,7 +84,7 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
    - "моча" — общий анализ мочи
    - "кал" — анализ кала
    - "гистология" — гистология, биопсия
-   
+
    Для категории "исследования":
    - "узи" — ультразвуковое исследование
    - "кт" — компьютерная томография
@@ -99,7 +94,7 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
    - "экг" — электрокардиограмма
    - "эндоскопия" — ФГДС, бронхоскопия и т.д.
    - "колоноскопия" — колоноскопия
-   
+
    - "другое" — если не подходит ничего
 
 3. **title** — название документа (например: "Общий анализ крови", "КТ брюшной полости", "Консультация уролога")
@@ -121,16 +116,18 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
     - ["Приём препарата X по 1 таб. 2 раза в день", "Диета №5", "Повторный приём через 2 недели"]
     Если рекомендаций нет — пустой массив [].
 
-11. **keyValues** — ключевые числовые показатели в формате {"название": "значение с единицами"}. 
-    Примеры: {"ПСА общий": "4.5 нг/мл", "Гемоглобин": "130 г/л", "Креатинин": "98 мкмоль/л"}
+11. **keyValues** — ВСЕ числовые показатели, не только ключевые.
+    Для общего анализа крови — все 30-40 строк. Для биохимии — все показатели.
+    Формат: {"название": "значение единицы [норма: мин-макс]"}
+    Пример: {"Гемоглобин": "130 г/л [130-160]", "СОЭ": "25 мм/ч [2-15]"}
+    Если в документе указаны референсные значения — включи их в квадратных скобках.
     Для выписок/эпикризов указывай ПОСЛЕДНИЕ значения (при выписке).
-    Для анализов — все значимые показатели.
 
-12. **tags** — массив тегов для поиска и фильтрации. 
+12. **tags** — массив тегов для поиска и фильтрации.
     Примеры: ["онкология", "простата", "ПСА", "биохимия", "почки"]
     Включай: органы, заболевания, типы исследований, важные показатели.
 
-13. **confidence** — твоя уверенность в анализе от 0 до 1. 
+13. **confidence** — твоя уверенность в анализе от 0 до 1.
     1.0 = документ чёткий, всё распознано
     0.5 = часть информации неразборчива или предположительна
     0.0 = не удалось проанализировать
@@ -144,7 +141,7 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
     - beforeValue: значение показателя ДО процедуры (число)
     - afterValue: значение показателя ПОСЛЕ процедуры (число)
     - unit: единица измерения
-    
+
     ВАЖНО для гемотрансфузии: Если гемоглобин резко вырос за 1-2 дня (на 20+ г/л) — это признак гемотрансфузии!
     Пример: Hb 75 → 108 за 2 дня = была гемотрансфузия.
     Даже если в тексте явно не написано "гемотрансфузия", извлеки её по косвенным признакам:
@@ -152,7 +149,7 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
     - Фенотипирование эритроцитов
     - Скрининг антиэритроцитарных антител
     - Резкий скачок гемоглобина
-    
+
     Пример: [{"date": "2026-01-29", "type": "hemotransfusion", "name": "Гемотрансфузия эритроцитарной массы", "details": {"bloodType": "A(II) Rh-"}, "beforeValue": 75, "afterValue": 108, "unit": "г/л"}]
     Если процедур нет — пустой массив [].
 
@@ -162,13 +159,17 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
     - name: название показателя ("Гемоглобин", "Лейкоциты")
     - unit: единица измерения
     - values: массив {date: "YYYY-MM-DD", value: число}
-    
+
     Пример: [{"name": "Гемоглобин", "unit": "г/л", "values": [{"date": "2026-01-26", "value": 87}, {"date": "2026-01-28", "value": 75}, {"date": "2026-01-30", "value": 108}]}]
     Если динамики нет (одиночный анализ) — пустой массив [].
 
+16. **fullText** — ПОЛНАЯ РАСШИФРОВКА документа. Перепиши ВЕСЬ текст документа как есть,
+    сохраняя структуру. Для анализов — ВСЕ строки с показателями, не только ключевые.
+    Для заключений — полный текст. Это нужно для поиска по документам.
+
 Контекст пациента: ${PATIENT.gender} ${getAge()} лет, основной диагноз — ${PATIENT.mainDiagnosis || 'не указан'}${PATIENT.mainDiagnosisCode ? ` (${PATIENT.mainDiagnosisCode})` : ''}.
 
-ВАЖНО: 
+ВАЖНО:
 - Заключение врача и рекомендации извлекай ДОСЛОВНО из документа, не перефразируй!
 - Для выписок/эпикризов ОБЯЗАТЕЛЬНО извлекай procedures и measurementsDynamics!
 - Гемотрансфузия определяется по резкому росту гемоглобина + подготовительным анализам (группа крови, антитела).
@@ -176,18 +177,12 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
 Верни ТОЛЬКО валидный JSON без markdown-форматирования, без \`\`\`json, просто чистый JSON объект.`
 
 /**
- * Анализирует документ по URL и типу файла через OpenRouter.
- * Args:
- *   fileUrl (string): Публичный URL файла в Vercel Blob.
- *   fileType (string): MIME-тип файла.
- * Returns:
- *   AnalysisResult: Результат AI-анализа.
+ * Анализирует документ по URL и типу файла через Anthropic API.
  */
 export async function analyzeDocument(
   fileUrl: string,
   fileType: string
 ): Promise<AnalysisResult> {
-  // Проверка ключа происходит в getOpenRouter()
   if (fileType.startsWith('image/')) {
     return analyzeImage(fileUrl, fileType)
   }
@@ -201,10 +196,6 @@ export async function analyzeDocument(
 
 /**
  * Анализирует несколько изображений как один многостраничный документ.
- * Args:
- *   images (array): Массив объектов { url, mediaType }.
- * Returns:
- *   AnalysisResult: Результат AI-анализа.
  */
 export async function analyzeMultipleImages(
   images: { url: string; mediaType: string }[]
@@ -218,19 +209,20 @@ export async function analyzeMultipleImages(
   }
 
   // Конвертируем все изображения в base64
-  const imageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+  const imageContents: Anthropic.Messages.ContentBlockParam[] = []
 
   for (let i = 0; i < images.length; i++) {
     const { url, mediaType } = images[i]
     const response = await fetch(url)
     const arrayBuffer = await response.arrayBuffer()
     const base64 = Buffer.from(arrayBuffer).toString('base64')
-    const dataUrl = `data:${mediaType};base64,${base64}`
 
     imageContents.push({
-      type: 'image_url',
-      image_url: {
-        url: dataUrl,
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+        data: base64,
       },
     })
   }
@@ -246,9 +238,9 @@ ${ANALYSIS_PROMPT}`
     text: multiPagePrompt,
   })
 
-  const completion = await getOpenRouter().chat.completions.create({
-    model: MODEL,
-    max_tokens: 4000,
+  const response = await getClient().messages.create({
+    model: ANALYSIS_MODEL,
+    max_tokens: 8000,
     messages: [
       {
         role: 'user',
@@ -257,43 +249,35 @@ ${ANALYSIS_PROMPT}`
     ],
   })
 
-  const textContent = completion.choices[0]?.message?.content
-  if (!textContent) {
-    throw new Error('No response from OpenRouter')
-  }
-
+  const textContent = extractTextFromResponse(response)
   return parseAnalysisJson(textContent)
 }
 
 /**
- * Анализирует изображение через OpenRouter (Claude Vision).
- * Args:
- *   imageUrl (string): URL изображения.
- *   mediaType (string): MIME-тип изображения.
- * Returns:
- *   AnalysisResult: Результат анализа.
+ * Анализирует изображение через Anthropic (Claude Vision).
  */
 async function analyzeImage(
   imageUrl: string,
   mediaType: string
 ): Promise<AnalysisResult> {
-  // Скачиваем изображение и конвертируем в base64 data URL
+  // Скачиваем изображение и конвертируем в base64
   const response = await fetch(imageUrl)
   const arrayBuffer = await response.arrayBuffer()
   const base64 = Buffer.from(arrayBuffer).toString('base64')
-  const dataUrl = `data:${mediaType};base64,${base64}`
 
-  const completion = await getOpenRouter().chat.completions.create({
-    model: MODEL,
-    max_tokens: 3000,
+  const apiResponse = await getClient().messages.create({
+    model: ANALYSIS_MODEL,
+    max_tokens: 8000,
     messages: [
       {
         role: 'user',
         content: [
           {
-            type: 'image_url',
-            image_url: {
-              url: dataUrl,
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+              data: base64,
             },
           },
           {
@@ -305,11 +289,7 @@ async function analyzeImage(
     ],
   })
 
-  const textContent = completion.choices[0]?.message?.content
-  if (!textContent) {
-    throw new Error('No response from OpenRouter')
-  }
-
+  const textContent = extractTextFromResponse(apiResponse)
   return parseAnalysisJson(textContent)
 }
 
@@ -323,9 +303,9 @@ async function analyzeText(text: string): Promise<AnalysisResult> {
     ? text.substring(0, 30000) + '\n\n[...текст обрезан...]'
     : text
 
-  const completion = await getOpenRouter().chat.completions.create({
-    model: MODEL,
-    max_tokens: 4000,
+  const response = await getClient().messages.create({
+    model: ANALYSIS_MODEL,
+    max_tokens: 8000,
     messages: [
       {
         role: 'user',
@@ -334,18 +314,14 @@ async function analyzeText(text: string): Promise<AnalysisResult> {
     ],
   })
 
-  const textContent = completion.choices[0]?.message?.content
-  if (!textContent) {
-    throw new Error('No response from OpenRouter')
-  }
-
+  const textContent = extractTextFromResponse(response)
   return parseAnalysisJson(textContent)
 }
 
 /**
- * Анализирует PDF через OpenRouter.
- * Стратегия: сначала извлечь текст (быстро, работает для OCR-PDF из AnyScanner и т.п.),
- * если текста нет — отправить как base64 (Vision), но с ограничением по размеру.
+ * Анализирует PDF через Anthropic.
+ * Стратегия: сначала извлечь текст (быстро, работает для OCR-PDF),
+ * если текста нет — отправить постранично через Vision.
  */
 async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
   const response = await fetch(pdfUrl)
@@ -357,21 +333,18 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pdfParseModule = await import('pdf-parse') as any
-    // pdf-parse v2 exports { PDFParse } class; v1 exports default function
     let text = ''
     if (pdfParseModule.PDFParse) {
-      // v2 API: new PDFParse(uint8array) → .getText() → { text, pages, total }
       const parser = new pdfParseModule.PDFParse(new Uint8Array(buffer))
       const result = await parser.getText()
       text = (typeof result === 'string' ? result : result?.text ?? '').trim()
     } else {
-      // v1 API: pdfParse(buffer) → { text, numpages, ... }
       const pdfParse = pdfParseModule.default ?? pdfParseModule
       const pdfData = await pdfParse(buffer)
       text = (pdfData.text ?? '').trim()
     }
 
-    // Фильтруем фейковый текст (AnyScanner добавляет только водяной знак "AnyScanner")
+    // Фильтруем фейковый текст (AnyScanner добавляет только водяной знак)
     const cleanText = text.replace(/AnyScanner/gi, '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '').trim()
 
     if (cleanText && cleanText.length > 200) {
@@ -383,62 +356,25 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
     console.log('PDF text extraction failed:', err instanceof Error ? err.message : err)
   }
 
-  // 2. Для больших PDF — разбить на отдельные страницы и отправить через Vision
-  if (sizeMB > 4.5) {
-    console.log(`PDF too large for single Vision request (${sizeMB.toFixed(1)} MB), splitting into pages...`)
-    return analyzePdfByPages(buffer)
-  }
-
-  // 3. Vision-подход для небольших PDF без текста (< 4.5 MB)
-  console.log(`Using vision analysis for PDF (${sizeMB.toFixed(1)} MB)`)
-  const base64 = buffer.toString('base64')
-  const dataUrl = `data:application/pdf;base64,${base64}`
-
-  const completion = await getOpenRouter().chat.completions.create({
-    model: MODEL,
-    max_tokens: 4000,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'file',
-            file: {
-              filename: 'document.pdf',
-              file_data: dataUrl,
-            },
-          } as OpenAI.Chat.Completions.ChatCompletionContentPart,
-          {
-            type: 'text',
-            text: ANALYSIS_PROMPT,
-          },
-        ],
-      },
-    ],
-  })
-
-  const textContent = completion.choices[0]?.message?.content
-  if (!textContent) {
-    throw new Error('No response from OpenRouter')
-  }
-
-  return parseAnalysisJson(textContent)
+  // 2. Vision-подход: разбиваем PDF на страницы и отправляем как изображения
+  console.log(`Using page-by-page vision analysis for PDF (${sizeMB.toFixed(1)} MB)`)
+  return analyzePdfByPages(buffer)
 }
 
 /**
- * Разбивает большой PDF на отдельные страницы и отправляет через Vision API.
- * Используется для image-only PDF (AnyScanner и т.п.) > 4.5 MB.
+ * Разбивает PDF на отдельные страницы и отправляет через Vision API.
+ * Anthropic SDK поддерживает PDF через document type.
  */
 async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
   const { PDFDocument } = await import('pdf-lib')
   const pdfDoc = await PDFDocument.load(new Uint8Array(buffer))
   const pageCount = pdfDoc.getPageCount()
 
-  // Ограничиваем до 15 страниц чтобы не превысить лимит запроса
+  // Ограничиваем до 15 страниц
   const maxPages = Math.min(pageCount, 15)
   console.log(`Splitting PDF: ${pageCount} pages, processing ${maxPages}`)
 
-  const pageContents: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+  const pageContents: Anthropic.Messages.ContentBlockParam[] = []
 
   for (let i = 0; i < maxPages; i++) {
     const singleDoc = await PDFDocument.create()
@@ -446,15 +382,15 @@ async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
     singleDoc.addPage(copiedPage)
     const pageBytes = await singleDoc.save()
     const pageBase64 = Buffer.from(pageBytes).toString('base64')
-    const pageDataUrl = `data:application/pdf;base64,${pageBase64}`
 
     pageContents.push({
-      type: 'file',
-      file: {
-        filename: `page_${i + 1}.pdf`,
-        file_data: pageDataUrl,
+      type: 'document',
+      source: {
+        type: 'base64',
+        media_type: 'application/pdf',
+        data: pageBase64,
       },
-    } as OpenAI.Chat.Completions.ChatCompletionContentPart)
+    })
   }
 
   const multiPagePrompt = pageCount > maxPages
@@ -466,11 +402,11 @@ async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
     text: multiPagePrompt,
   })
 
-  console.log(`Sending ${maxPages} page PDFs to Vision API...`)
+  console.log(`Sending ${maxPages} page PDFs to Anthropic API...`)
 
-  const completion = await getOpenRouter().chat.completions.create({
-    model: MODEL,
-    max_tokens: 4000,
+  const response = await getClient().messages.create({
+    model: ANALYSIS_MODEL,
+    max_tokens: 8000,
     messages: [
       {
         role: 'user',
@@ -479,18 +415,43 @@ async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
     ],
   })
 
-  const textContent = completion.choices[0]?.message?.content
-  if (!textContent) {
-    throw new Error('No response from OpenRouter')
-  }
-
+  const textContent = extractTextFromResponse(response)
   return parseAnalysisJson(textContent)
 }
 
 /**
+ * Универсальная функция для генерации текста через Claude.
+ * Используется в extract/route.ts и других местах.
+ */
+export async function generateWithClaude(
+  prompt: string,
+  options?: { model?: string; maxTokens?: number; system?: string }
+): Promise<string> {
+  const client = getClient()
+  const response = await client.messages.create({
+    model: options?.model || ANALYSIS_MODEL,
+    max_tokens: options?.maxTokens || 4096,
+    ...(options?.system && { system: options.system }),
+    messages: [{ role: 'user', content: prompt }],
+  })
+  const block = response.content[0]
+  if (block.type !== 'text') throw new Error('Unexpected response type')
+  return block.text
+}
+
+/**
+ * Извлекает текст из ответа Anthropic API.
+ */
+function extractTextFromResponse(response: Anthropic.Messages.Message): string {
+  const block = response.content[0]
+  if (!block || block.type !== 'text') {
+    throw new Error('No text response from Anthropic')
+  }
+  return block.text
+}
+
+/**
  * Извлекает первый полный JSON-объект из текста с помощью balanced brace matching.
- * В отличие от greedy regex /\{[\s\S]*\}/, корректно находит конец первого объекта,
- * не захватывая мусор после закрывающей скобки.
  */
 function extractJsonObject(text: string): string | null {
   const startIdx = text.indexOf('{')
@@ -510,10 +471,6 @@ function extractJsonObject(text: string): string | null {
 
 /**
  * Парсит JSON-ответ от модели.
- * Args:
- *   rawText (string): Текст ответа.
- * Returns:
- *   AnalysisResult: Распарсенный JSON.
  */
 function parseAnalysisJson(rawText: string): AnalysisResult {
   console.log('Raw AI response length:', rawText.length)
@@ -543,7 +500,7 @@ function parseAnalysisJson(rawText: string): AnalysisResult {
     console.log('Direct parse failed, trying to extract JSON...')
   }
 
-  // Попытка 2: balanced brace extraction — находит первый полный JSON-объект
+  // Попытка 2: balanced brace extraction
   const extracted = extractJsonObject(rawText)
   if (extracted) {
     try {

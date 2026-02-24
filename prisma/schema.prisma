@@ -9,41 +9,41 @@ datasource db {
 
 model Document {
   id        String   @id @default(uuid())
-  
+
   // Основная информация
   date      DateTime                    // Дата документа (когда сделан анализ/приём)
   category  String                      // Категория: "заключения", "анализы", "исследования"
   subtype   String                      // Подтип: "консультация", "кровь", "кт" и т.д.
   title     String                      // Заголовок: "Биохимия крови", "КТ брюшной полости"
-  
+
   // Где и кто
   doctor    String?                     // ФИО врача
   specialty String?                     // Специальность: "уролог", "онколог", "терапевт"
   clinic    String?                     // Медучреждение
-  
+
   // Содержимое
   summary   String?  @db.Text           // AI-резюме (краткий пересказ)
   conclusion String? @db.Text           // Заключение врача (дословная цитата из документа)
   recommendations String[] @default([]) // Рекомендации врача (список задач для пациента)
   content   String?  @db.Text           // Полный текст/расшифровка
-  
+
   // Файл
   fileUrl   String?                     // URL файла в Vercel Blob
   fileName  String?                     // Оригинальное имя файла
   fileType  String?                     // MIME тип: "application/pdf", "image/jpeg"
-  
+
   // Структурированные данные
   tags      String[]                    // Теги: ["онкология", "ПСА", "простата"]
   keyValues Json?                       // Ключевые показатели: {"ПСА": "4.5 нг/мл", "гемоглобин": "130 г/л"}
-  
+
   // Связи
   measurements Measurement[]            // Извлечённые числовые показатели
   procedures   Procedure[]              // Проведённые процедуры (гемотрансфузии, операции)
-  
+
   // Мета
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
   @@index([date])
   @@index([category])
   @@index([subtype])
@@ -53,19 +53,24 @@ model Document {
 // Измерение показателя (для графиков динамики)
 model Measurement {
   id          String   @id @default(uuid())
-  
+
   // Связь с документом-источником
   documentId  String
   document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  
+
   // Данные измерения
   name        String   // "ПСА общий", "Гемоглобин"
   value       Float    // Числовое значение: 4.5, 130
   unit        String   // Единицы: "нг/мл", "г/л"
   date        DateTime // Дата измерения (из документа)
-  
+
+  // Референсные значения (из документа)
+  normalMin   Float?     // Нижняя граница нормы
+  normalMax   Float?     // Верхняя граница нормы
+  isAbnormal  Boolean?   // Выходит за пределы нормы
+
   createdAt   DateTime @default(now())
-  
+
   @@index([name, date])
   @@index([documentId])
 }
@@ -77,7 +82,7 @@ model BatchPending {
   fileUrl    String   // URL загруженного файла в Vercel Blob
   fileType   String   // MIME тип
   receivedAt DateTime @default(now())
-  
+
   @@index([chatId])
 }
 
@@ -86,34 +91,34 @@ model PendingDocument {
   id              String   @id @default(uuid())
   chatId          BigInt   // Telegram Chat ID
   messageId       Int?     // ID сообщения с кнопками (для редактирования)
-  
+
   // Данные документа (JSON)
   documentData    Json     // Все поля документа
-  
+
   // Найденный дубликат
   duplicateId     String?  // ID существующего документа-дубликата
-  
+
   createdAt       DateTime @default(now())
   expiresAt       DateTime // Автоудаление через 1 час
-  
+
   @@index([chatId])
 }
 
 // Кэш выписки 027/у
 model CachedExtract {
   id              String   @id @default(uuid())
-  
+
   // Период выписки
   periodFrom      DateTime
   periodTo        DateTime
-  
+
   // Контент выписки (JSON)
   content         Json     // ExtractData объект
-  
+
   // Метаданные
   documentsCount  Int      // Сколько документов было в выписке
   generatedAt     DateTime @default(now())
-  
+
   @@unique([periodFrom]) // Одна выписка на период лечения
 }
 
@@ -124,28 +129,28 @@ model CachedExtract {
 // Медицинская процедура (гемотрансфузия, операция, манипуляция)
 model Procedure {
   id          String   @id @default(uuid())
-  
+
   // Связь с документом-источником (опционально)
   documentId  String?
   document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
-  
+
   // Данные процедуры
   date        DateTime  // Дата процедуры
   type        String    // "hemotransfusion", "surgery", "manipulation", "puncture"
   name        String    // "Гемотрансфузия эритроцитарной массы", "Лапароцентез"
-  
+
   // Детали (зависят от типа)
   details     Json?     // Для гемотрансфузии: {volume: "300 мл", bloodType: "A(II) Rh-", component: "эритроцитарная масса"}
-  
+
   // Результат / показатели до и после
   beforeValue Float?    // Например, гемоглобин до: 75
   afterValue  Float?    // Гемоглобин после: 108
   unit        String?   // "г/л"
-  
+
   notes       String?   @db.Text
-  
+
   createdAt   DateTime  @default(now())
-  
+
   @@index([date])
   @@index([type])
   @@index([documentId])
@@ -158,23 +163,23 @@ model Procedure {
 // Событие/маркер на графике метрики
 model MetricEvent {
   id          String   @id @default(uuid())
-  
+
   // К какой метрике относится
   metricName  String   // "Гемоглобин", "ПСА общий", "СРБ" или "*" для всех
-  
+
   // Данные события
   date        DateTime  // Дата события
   eventType   String    // "hemotransfusion", "hormone_injection", "surgery", "hospitalization", "medication_start", "other"
   label       String    // Краткое описание: "Гемотрансфузия 2 дозы", "Укол Лейпрорелин"
   color       String    // Цвет маркера: "#9333ea", "#3b82f6"
-  
+
   // Дополнительно
   endDate     DateTime? // Для периодов (госпитализация): дата окончания
   notes       String?   @db.Text // Подробности
-  
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  
+
   @@index([metricName])
   @@index([date])
   @@index([eventType])
@@ -192,9 +197,9 @@ model Symptom {
   intensity   Int?     // Интенсивность 1-10 (опционально)
   duration    String?  // "2 часа", "весь день"
   notes       String?  @db.Text // Комментарий
-  
+
   createdAt   DateTime @default(now())
-  
+
   @@index([datetime])
   @@index([name])
 }
@@ -208,9 +213,9 @@ model VitalSign {
   value2      Float?   // Второе значение (для давления: 80)
   unit        String   // "°C", "мм рт.ст.", "уд/мин", "кг", "%"
   notes       String?  // Комментарий
-  
+
   createdAt   DateTime @default(now())
-  
+
   @@index([datetime])
   @@index([type])
 }
@@ -225,10 +230,38 @@ model Medication {
   endDate     DateTime? // Когда закончил (null = продолжает)
   notes       String?  @db.Text
   isActive    Boolean  @default(true) // Активный препарат
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([isActive])
   @@index([startDate])
+}
+
+// ============================================
+// ЧАТ: ИСТОРИЯ РАЗГОВОРОВ С ИИ
+// ============================================
+
+// Разговор с ИИ-ассистентом
+model Conversation {
+  id        String   @id @default(uuid())
+  title     String?                        // Авто-генерируется из первого вопроса
+  messages  Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Сообщение в разговоре
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role           String       // "user" | "assistant"
+  content        String  @db.Text
+
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
 }
