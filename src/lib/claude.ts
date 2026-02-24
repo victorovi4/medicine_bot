@@ -2,8 +2,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { PATIENT, getAge } from '@/lib/patient'
 
 // Модели
-const ANALYSIS_MODEL = 'claude-sonnet-4-6-20250514'    // для анализа документов
-export const CHAT_MODEL = 'claude-sonnet-4-6-20250514'  // для чата (Этап 2)
+const ANALYSIS_MODEL = 'claude-sonnet-4-6'    // для анализа документов
+export const CHAT_MODEL = 'claude-sonnet-4-6'  // для чата
 
 // Ленивая инициализация клиента
 let _client: Anthropic | null = null
