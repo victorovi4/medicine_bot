@@ -13,7 +13,7 @@ function getClient(): Anthropic {
     if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error('ANTHROPIC_API_KEY is not configured')
     }
-    _client = new Anthropic()  // читает ANTHROPIC_API_KEY из env
+    _client = new Anthropic({ maxRetries: 3 })  // retry на 429/529 с exponential backoff
   }
   return _client
 }

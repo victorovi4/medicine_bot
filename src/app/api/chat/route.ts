@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
     })
 
     // 5. Streaming response через Anthropic SDK
-    const client = new Anthropic()
+    const client = new Anthropic({ maxRetries: 3 })
     const stream = client.messages.stream({
       model: CHAT_MODEL,
       max_tokens: 4096,
