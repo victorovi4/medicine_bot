@@ -58,14 +58,16 @@ const ASSESSMENT_USER_PROMPT = `На основе ВСЕЙ медицинско�
 *Данное заключение сформировано искусственным интеллектом на основе загруженных медицинских документов. Оно НЕ является медицинским документом и не может заменить консультацию врача. Используйте его только как вспомогательный материал для обсуждения с лечащим врачом.*`
 
 /**
- * Собирает расширенный контекст из ВСЕХ медицинских данных пациента.
- * В отличие от buildFullContext в chat/route.ts, включает ВСЕ данные без ограничений,
- * а также measurements сгруппированные по метрикам и MetricEvents.
+ * Собирает контекст из медицинских данных пациента.
+ * Оптимизирован для укладки в 60с лимит Vercel:
+ * — документы в компактном формате (заключение + keyValues, без fullText)
+ * — measurements сгруппированы по метрикам
+ * — vitals/symptoms ограничены последними 20
  */
 async function buildAssessmentContext(prisma: ReturnType<typeof getPrismaClient>): Promise<string> {
   let context = ''
 
-  // 1. ВСЕ документы с полным текстом
+  // 1. Документы — компактный формат
   const documents = await prisma.document.findMany({
     orderBy: { date: 'asc' },
     include: {
@@ -77,39 +79,32 @@ async function buildAssessmentContext(prisma: ReturnType<typeof getPrismaClient>
     context += `\n## Медицинские документы (${documents.length} шт.)\n\n`
     for (const doc of documents) {
       const date = new Date(doc.date).toLocaleDateString('ru-RU')
-      context += `### ${date} — ${doc.title} [${doc.category}/${doc.subtype}]\n`
-      if (doc.doctor) context += `Врач: ${doc.doctor}`
+      context += `- **${date}** ${doc.title} [${doc.category}/${doc.subtype}]`
+      if (doc.doctor) context += ` | ${doc.doctor}`
       if (doc.specialty) context += ` (${doc.specialty})`
-      if (doc.clinic) context += ` | ${doc.clinic}`
-      if (doc.doctor || doc.specialty || doc.clinic) context += '\n'
+      context += '\n'
 
-      if (doc.content) {
-        context += `${doc.content}\n`
-      } else if (doc.summary) {
-        context += `Резюме: ${doc.summary}\n`
-      }
-
+      // Заключение — самое важное (до 300 символов)
       if (doc.conclusion) {
-        context += `Заключение: ${doc.conclusion}\n`
+        const concl = doc.conclusion.length > 300 ? doc.conclusion.slice(0, 300) + '…' : doc.conclusion
+        context += `  Заключение: ${concl}\n`
       }
 
-      if (doc.recommendations.length > 0) {
-        context += `Рекомендации: ${doc.recommendations.join('; ')}\n`
-      }
-
+      // keyValues — числовые показатели
       if (doc.keyValues && typeof doc.keyValues === 'object') {
         const kv = doc.keyValues as Record<string, string>
         if (Object.keys(kv).length > 0) {
-          context += `Показатели: ${Object.entries(kv).map(([k, v]) => `${k}: ${v}`).join(', ')}\n`
+          context += `  Показатели: ${Object.entries(kv).map(([k, v]) => `${k}: ${v}`).join(', ')}\n`
         }
       }
 
-      if (doc.tags.length > 0) {
-        context += `Теги: ${doc.tags.join(', ')}\n`
+      // Рекомендации (до 200 символов)
+      if (doc.recommendations.length > 0) {
+        const recsStr = doc.recommendations.join('; ')
+        context += `  Рекомендации: ${recsStr.length > 200 ? recsStr.slice(0, 200) + '…' : recsStr}\n`
       }
-
-      context += '\n---\n\n'
     }
+    context += '\n'
   }
 
   // 2. ВСЕ measurements сгруппированные по метрике (для анализа трендов)
@@ -173,9 +168,10 @@ async function buildAssessmentContext(prisma: ReturnType<typeof getPrismaClient>
     context += '\n'
   }
 
-  // 5. ВСЕ показатели (vitals) — без ограничения take
+  // 5. Последние показатели (vitals) — ограничение 20
   const vitals = await prisma.vitalSign.findMany({
     orderBy: { datetime: 'desc' },
+    take: 20,
   })
   if (vitals.length > 0) {
     context += '## Показатели (дневник)\n'
@@ -186,9 +182,10 @@ async function buildAssessmentContext(prisma: ReturnType<typeof getPrismaClient>
     context += '\n'
   }
 
-  // 6. ВСЕ симптомы — без ограничения take
+  // 6. Последние симптомы — ограничение 20
   const symptoms = await prisma.symptom.findMany({
     orderBy: { datetime: 'desc' },
+    take: 20,
   })
   if (symptoms.length > 0) {
     context += '## Симптомы\n'
@@ -246,12 +243,12 @@ export async function POST(request: NextRequest) {
 
     // Streaming response через Anthropic SDK
     const client = new Anthropic({
-      maxRetries: 2,
-      timeout: 45 * 1000,
+      maxRetries: 1,
+      timeout: 55 * 1000,
     })
     const stream = client.messages.stream({
       model: CHAT_MODEL,
-      max_tokens: 8192,
+      max_tokens: 4096,
       system: ASSESSMENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
     })
