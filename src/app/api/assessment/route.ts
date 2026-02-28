@@ -29,7 +29,7 @@ const ASSESSMENT_SYSTEM_PROMPT = `Ты — опытный врач-аналит�
 
 const ASSESSMENT_USER_PROMPT = `На основе ВСЕЙ медицинской истории пациента, представленной ниже, составь комплексное экспертное заключение.
 
-Сформулируй структурированное заключение с ровно 6 секциями в формате Markdown. Будь конкретен и лаконичен — указывай даты и цифры, избегай воды:
+Сформулируй КРАТКОЕ заключение с ровно 6 секциями в формате Markdown. МАКСИМАЛЬНО лаконично — только факты, даты, цифры. Каждая секция — 3-5 предложений, не больше:
 
 ## 1. Хронология заболевания
 Ключевые события на временной оси: даты постановки диагнозов, госпитализации, операции, начало/смена терапии. Формат — хронологический список с датами.
@@ -67,13 +67,16 @@ const ASSESSMENT_USER_PROMPT = `На основе ВСЕЙ медицинско�
 async function buildAssessmentContext(prisma: ReturnType<typeof getPrismaClient>): Promise<string> {
   let context = ''
 
-  // 1. Документы — компактный формат
+  // 1. Документы — последние 60, компактный формат
   const documents = await prisma.document.findMany({
-    orderBy: { date: 'asc' },
+    orderBy: { date: 'desc' },
+    take: 60,
     include: {
       measurements: true,
     },
   })
+  // Отсортировать хронологически для контекста
+  documents.reverse()
 
   if (documents.length > 0) {
     context += `\n## Медицинские документы (${documents.length} шт.)\n\n`
@@ -248,7 +251,7 @@ export async function POST(request: NextRequest) {
     })
     const stream = client.messages.stream({
       model: CHAT_MODEL,
-      max_tokens: 4096,
+      max_tokens: 2048,
       system: ASSESSMENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
     })
