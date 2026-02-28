@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { PATIENT, getFullName, getAge, getFormattedBirthDate, getFormattedTreatmentStartDate } from '@/lib/patient'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { FileText, MessageSquare } from 'lucide-react'
+import { FileText, MessageSquare, Stethoscope } from 'lucide-react'
 
 export function PatientHeader() {
   const hasComorbidities = PATIENT.comorbidities.length > 0
@@ -67,6 +67,13 @@ export function PatientHeader() {
               >
                 <FileText className="h-4 w-4" />
                 <span>Резюме (027/у)</span>
+              </Link>
+              <Link
+                href="/assessment"
+                className="inline-flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-800 hover:underline"
+              >
+                <Stethoscope className="h-4 w-4" />
+                <span>ИИ-заключение</span>
               </Link>
             </div>
             

@@ -5,6 +5,9 @@
     },
     "src/app/api/analyze/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/assessment/route.ts": {
+      "maxDuration": 60
     }
   }
 }

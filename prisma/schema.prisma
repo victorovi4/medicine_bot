@@ -265,3 +265,15 @@ model Message {
 
   @@index([conversationId])
 }
+
+// ============================================
+// ИИ-ЗАКЛЮЧЕНИЕ (ASSESSMENT)
+// ============================================
+
+// Сохранённое комплексное ИИ-заключение по медицинской карте
+model Assessment {
+  id        String   @id @default(uuid())
+  content   String   @db.Text     // Полный текст заключения (Markdown)
+  metadata  Json?                 // {documentsCount, generationTime, model}
+  createdAt DateTime @default(now())
+}
