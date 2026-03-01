@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Link from 'next/link'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -240,28 +241,36 @@ export default function AssessmentPage() {
           </p>
         </div>
 
-        <Button
-          onClick={generate}
-          disabled={generating}
-          className="bg-emerald-600 hover:bg-emerald-700"
-        >
-          {generating ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Генерация...
-            </>
-          ) : assessment ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Обновить
-            </>
-          ) : (
-            <>
-              <Stethoscope className="h-4 w-4 mr-2" />
-              Сгенерировать ИИ-заключение
-            </>
-          )}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/chat">
+            <Button variant="outline" className="text-purple-600 border-purple-200 hover:bg-purple-50">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Задать вопрос
+            </Button>
+          </Link>
+          <Button
+            onClick={generate}
+            disabled={generating}
+            className="bg-emerald-600 hover:bg-emerald-700"
+          >
+            {generating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Генерация...
+              </>
+            ) : assessment ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Обновить
+              </>
+            ) : (
+              <>
+                <Stethoscope className="h-4 w-4 mr-2" />
+                Сгенерировать ИИ-заключение
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Error */}
