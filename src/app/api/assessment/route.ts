@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
     })
     const stream = client.messages.stream({
       model: ANALYSIS_MODEL,  // Haiku 4.5 — в 3-5x быстрее Sonnet, укладывается в 60с Vercel timeout
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: ASSESSMENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
     })
