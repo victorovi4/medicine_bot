@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
-import { ANALYSIS_MODEL } from '@/lib/claude'
+import { CHAT_MODEL } from '@/lib/claude'
 import { PATIENT, getFullName, getAge } from '@/lib/patient'
 
 export const runtime = 'nodejs'
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
       timeout: 55 * 1000,
     })
     const stream = client.messages.stream({
-      model: ANALYSIS_MODEL,  // Haiku 4.5 — в 3-5x быстрее Sonnet, укладывается в 60с Vercel timeout
+      model: CHAT_MODEL,  // Sonnet 4.6 — качественнее Haiku, может не уложиться в 60с на Hobby
       max_tokens: 4096,
       system: ASSESSMENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
@@ -272,7 +272,7 @@ export async function POST(request: NextRequest) {
               content: fullResponse,
               metadata: {
                 documentsCount,
-                model: ANALYSIS_MODEL,
+                model: CHAT_MODEL,
                 generatedAt: new Date().toISOString(),
               },
             },
