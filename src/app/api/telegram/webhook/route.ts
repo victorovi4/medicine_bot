@@ -1436,11 +1436,11 @@ async function showMedications(chatId: number): Promise<void> {
     await sendMessage(
       chatId,
       `💊 Список препаратов пуст.\n\n` +
-        `Чтобы добавить препарат, напишите:\n` +
-        `\`/med Название, дозировка, сколько раз в день\`\n\n` +
-        `Например:\n` +
-        `\`/med Преднизолон, 5 мг, 2 раза в день\``,
-      { 
+        `Просто отправьте список лекарств в свободной форме, например:\n\n` +
+        `Периндоприл 4 мг 1/4 таб на ночь\n` +
+        `Метопролол 25 мг 1/2 таб 2 раза в день\n` +
+        `Омепразол 20 мг 1 таб на ночь`,
+      {
         parse_mode: 'Markdown',
         reply_markup: DIARY_KEYBOARD,
       }
@@ -1458,7 +1458,7 @@ async function showMedications(chatId: number): Promise<void> {
     text += `\n  (с ${startDate})\n`
   }
   
-  text += `\n➕ Добавить: \`/med Название, дозировка, частота\``
+  text += `\n➕ Добавить: отправьте список в свободной форме`
   
   await sendMessage(chatId, text, {
     parse_mode: 'Markdown',
