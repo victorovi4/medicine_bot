@@ -504,7 +504,7 @@ export async function POST(request: NextRequest) {
       // Эвристика: похоже на список лекарств?
       // Несколько строк + упоминания дозировок/частоты
       const lines = text.split('\n').filter(l => l.trim().length > 0)
-      const medKeywords = /\b(мг|мл|таб|капс|раз|день|ночь|утр|вечер|р\/д|п\/о|в\/м|в\/в)\b/i
+      const medKeywords = /(мг|мл|таб|капс|раз |р\/д|п\/о|в\/м|в\/в)/i
       const looksLikeMeds = lines.length >= 2 && lines.filter(l => medKeywords.test(l)).length >= 2
 
       if (looksLikeMeds) {
