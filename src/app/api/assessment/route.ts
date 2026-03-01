@@ -312,6 +312,50 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * PUT /api/assessment
+ * Заменить заключение вручную (например, сгенерированное Opus в CLI).
+ * Body: { content, metadata? }
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const prisma = getPrismaClient({ testMode: isTestModeRequest(request) })
+    const body = await request.json()
+
+    if (!body.content || typeof body.content !== 'string') {
+      return new Response(JSON.stringify({ error: 'content is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Удалить все старые заключения
+    await prisma.assessment.deleteMany({})
+
+    // Сохранить новое
+    const saved = await prisma.assessment.create({
+      data: {
+        content: body.content,
+        metadata: body.metadata || null,
+      },
+    })
+
+    return new Response(JSON.stringify({
+      id: saved.id,
+      createdAt: saved.createdAt,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
+  } catch (error) {
+    console.error('Put assessment error:', error)
+    const msg = error instanceof Error ? error.message : 'Ошибка'
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+}
+
+/**
  * GET /api/assessment
  * Получить последнее сохранённое ИИ-заключение.
  */
