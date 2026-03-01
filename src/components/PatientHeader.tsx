@@ -13,8 +13,10 @@ export function PatientHeader() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           {/* Основная информация */}
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-blue-900">
-              {getFullName()}
+            <h1 className="text-2xl font-bold">
+              <Link href="/" className="text-blue-900 hover:text-blue-700 hover:underline">
+                {getFullName()}
+              </Link>
             </h1>
             <p className="text-blue-700">
               {getFormattedBirthDate()} ({getAge()} лет)
