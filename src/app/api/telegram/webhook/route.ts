@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { PDFDocument } from 'pdf-lib'
 import { prisma } from '@/lib/db'
-import { analyzeDocument, analyzeMultipleImages, AnalysisResult } from '@/lib/claude'
+import { analyzeDocument, analyzeMultipleImages, AnalysisResult, generateWithClaude, ANALYSIS_MODEL } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import { extractMeasurements } from '@/lib/metrics'
 import { findDuplicate } from '@/lib/duplicates'
@@ -52,6 +52,42 @@ function formatUploadFileName(date: Date): string {
   const hours = date.getHours().toString().padStart(2, '0')
   const minutes = date.getMinutes().toString().padStart(2, '0')
   return `Загрузка ${day}.${month}.${year} ${hours}-${minutes}.jpg`
+}
+
+/**
+ * Парсинг списка лекарств через Claude.
+ * Принимает свободный текст, возвращает массив {name, dosage, frequency}.
+ */
+async function parseMedicationsList(text: string): Promise<Array<{ name: string; dosage: string | null; frequency: string | null }>> {
+  const prompt = `Распознай список лекарств из текста. Верни ТОЛЬКО JSON-массив без markdown.
+
+Формат: [{"name": "Название", "dosage": "дозировка с формой выпуска", "frequency": "частота приёма"}]
+
+Правила:
+- name: только название препарата (без дозировки)
+- dosage: дозировка + форма (например "4 мг, 1/4 таб" или "25 мг, 1 таб")
+- frequency: режим приёма (например "1 раз в день на ночь" или "2 раза в день")
+- Если какое-то поле неясно — null
+- "п/о" = per os (внутрь), не включай в frequency
+- Исправляй очевидные опечатки в названиях (Метапролол → Метопролол)
+
+Текст:
+${text}`
+
+  const result = await generateWithClaude(prompt, {
+    model: ANALYSIS_MODEL,
+    maxTokens: 1024,
+  })
+
+  // Извлечь JSON из ответа
+  const jsonMatch = result.match(/\[[\s\S]*\]/)
+  if (!jsonMatch) return []
+
+  try {
+    return JSON.parse(jsonMatch[0])
+  } catch {
+    return []
+  }
 }
 
 /**
@@ -320,38 +356,63 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Команда добавления лекарства: /med Название, дозировка, частота
+    // Команда добавления лекарства: /med — свободный формат или через запятые
     if (message.text?.startsWith('/med ')) {
-      const parts = message.text.slice(5).split(',').map(s => s.trim())
-      const name = parts[0]
-      const dosage = parts[1] || null
-      const frequency = parts[2] || null
-      
-      if (!name) {
+      const medText = message.text.slice(5).trim()
+
+      if (!medText) {
         await sendMessage(chatId, '❌ Укажите название препарата.')
         return NextResponse.json({ ok: true })
       }
-      
-      await prisma.medication.create({
-        data: {
-          name,
-          dosage,
-          frequency,
-          startDate: new Date(),
-          isActive: true,
-        },
-      })
-      
-      await sendMessage(
-        chatId,
-        `✅ Препарат добавлен:\n\n💊 *${name}*` +
-          (dosage ? `\n📋 Дозировка: ${dosage}` : '') +
-          (frequency ? `\n🕐 Частота: ${frequency}` : ''),
-        {
-          parse_mode: 'Markdown',
-          reply_markup: DIARY_KEYBOARD,
+
+      try {
+        const parsed = await parseMedicationsList(medText)
+
+        if (parsed.length === 0) {
+          // Fallback: старый формат через запятые
+          const parts = medText.split(',').map(s => s.trim())
+          await prisma.medication.create({
+            data: {
+              name: parts[0],
+              dosage: parts[1] || null,
+              frequency: parts[2] || null,
+              startDate: new Date(),
+              isActive: true,
+            },
+          })
+          await sendMessage(chatId, `✅ Препарат добавлен: *${parts[0]}*`, {
+            parse_mode: 'Markdown',
+            reply_markup: DIARY_KEYBOARD,
+          })
+        } else {
+          for (const med of parsed) {
+            await prisma.medication.create({
+              data: {
+                name: med.name,
+                dosage: med.dosage || null,
+                frequency: med.frequency || null,
+                startDate: new Date(),
+                isActive: true,
+              },
+            })
+          }
+
+          let report = `✅ Добавлено препаратов: ${parsed.length}\n`
+          for (const med of parsed) {
+            report += `\n💊 *${med.name}*`
+            if (med.dosage) report += ` — ${med.dosage}`
+            if (med.frequency) report += `, ${med.frequency}`
+          }
+
+          await sendMessage(chatId, report, {
+            parse_mode: 'Markdown',
+            reply_markup: DIARY_KEYBOARD,
+          })
         }
-      )
+      } catch (error) {
+        console.error('Med parsing error:', error)
+        await sendMessage(chatId, '❌ Ошибка при распознавании. Попробуйте позже.')
+      }
       return NextResponse.json({ ok: true })
     }
 
@@ -436,13 +497,64 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
-    // Неизвестное сообщение
+    // Свободный текст — пробуем распознать как список лекарств
     if (message.text && !message.text.startsWith('/')) {
-      await sendMessage(
-        chatId,
-        '🤔 Отправьте фото или PDF документа.\n\n' +
-          'Для многостраничного документа используйте /batch'
-      )
+      const text = message.text.trim()
+
+      // Эвристика: похоже на список лекарств?
+      // Несколько строк + упоминания дозировок/частоты
+      const lines = text.split('\n').filter(l => l.trim().length > 0)
+      const medKeywords = /\b(мг|мл|таб|капс|раз|день|ночь|утр|вечер|р\/д|п\/о|в\/м|в\/в)\b/i
+      const looksLikeMeds = lines.length >= 2 && lines.filter(l => medKeywords.test(l)).length >= 2
+
+      if (looksLikeMeds) {
+        await sendMessage(chatId, '💊 Распознаю список препаратов...')
+
+        try {
+          const parsed = await parseMedicationsList(text)
+
+          if (parsed.length === 0) {
+            await sendMessage(chatId, '❌ Не удалось распознать препараты. Попробуйте другой формат.')
+            return NextResponse.json({ ok: true })
+          }
+
+          // Сохраняем все препараты
+          for (const med of parsed) {
+            await prisma.medication.create({
+              data: {
+                name: med.name,
+                dosage: med.dosage || null,
+                frequency: med.frequency || null,
+                startDate: new Date(),
+                isActive: true,
+              },
+            })
+          }
+
+          // Формируем отчёт
+          let report = `✅ Добавлено препаратов: ${parsed.length}\n`
+          for (const med of parsed) {
+            report += `\n💊 *${med.name}*`
+            if (med.dosage) report += ` — ${med.dosage}`
+            if (med.frequency) report += `, ${med.frequency}`
+          }
+
+          await sendMessage(chatId, report, {
+            parse_mode: 'Markdown',
+            reply_markup: MAIN_KEYBOARD,
+          })
+        } catch (error) {
+          console.error('Medication parsing error:', error)
+          await sendMessage(chatId, '❌ Ошибка при распознавании препаратов. Попробуйте позже.')
+        }
+      } else {
+        await sendMessage(
+          chatId,
+          '🤔 Отправьте фото или PDF документа.\n\n' +
+            'Для многостраничного документа используйте /batch\n' +
+            'Для добавления лекарств — отправьте список в свободной форме'
+        )
+      }
     }
 
     return NextResponse.json({ ok: true })
