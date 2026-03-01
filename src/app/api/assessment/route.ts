@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
-import { CHAT_MODEL } from '@/lib/claude'
+import { ANALYSIS_MODEL } from '@/lib/claude'
 import { PATIENT, getFullName, getAge } from '@/lib/patient'
 
 export const runtime = 'nodejs'
@@ -29,9 +29,9 @@ const ASSESSMENT_SYSTEM_PROMPT = `Ты — опытный врач-аналит�
 
 const ASSESSMENT_USER_PROMPT = `Составь экспертное заключение по медицинской истории ниже. Формат — ровно 6 секций Markdown. НЕ используй таблицы. Обсуждай основной диагноз, стадию, ответ на терапию.
 
-БЮДЖЕТ ТЕКСТА: у тебя ~1500 слов на всё заключение. Распредели так:
-- Секции 1-3: по ~200 слов (факты кратко)
-- Секции 4-6: по ~300 слов (аналитика подробнее)
+БЮДЖЕТ ТЕКСТА: у тебя ~2500 слов на всё заключение. Распредели так:
+- Секции 1-3: по ~300 слов (факты)
+- Секции 4-6: по ~500 слов (аналитика подробнее)
 
 ## 1. Хронология заболевания
 5-8 ключевых дат: диагноз, госпитализации, смена терапии. Одна строка на событие.
@@ -247,8 +247,8 @@ export async function POST(request: NextRequest) {
       timeout: 55 * 1000,
     })
     const stream = client.messages.stream({
-      model: CHAT_MODEL,
-      max_tokens: 2048,
+      model: ANALYSIS_MODEL,  // Haiku 4.5 — в 3-5x быстрее Sonnet, укладывается в 60с Vercel timeout
+      max_tokens: 4096,
       system: ASSESSMENT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMessage }],
     })
@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
               content: fullResponse,
               metadata: {
                 documentsCount,
-                model: CHAT_MODEL,
+                model: ANALYSIS_MODEL,
                 generatedAt: new Date().toISOString(),
               },
             },

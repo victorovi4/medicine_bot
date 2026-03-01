@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { PATIENT, getAge } from '@/lib/patient'
 
 // Модели
-const ANALYSIS_MODEL = 'claude-haiku-4-5-20251001'  // для анализа документов (OCR, извлечение JSON) — ~10x дешевле Sonnet
+export const ANALYSIS_MODEL = 'claude-haiku-4-5-20251001'  // для анализа документов (OCR, извлечение JSON) — ~10x дешевле Sonnet
 export const CHAT_MODEL = 'claude-sonnet-4-6'        // для чата и аналитики
 
 // Ленивая инициализация клиента
