@@ -8,6 +8,9 @@
     },
     "src/app/api/assessment/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/chat/route.ts": {
+      "maxDuration": 60
     }
   }
 }
