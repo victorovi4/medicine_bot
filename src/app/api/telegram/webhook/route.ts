@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { PDFDocument } from 'pdf-lib'
-import { prisma } from '@/lib/db'
+import { prisma, withDbRetry } from '@/lib/db'
 import { analyzeDocument, analyzeMultipleImages, AnalysisResult, generateWithClaude, ANALYSIS_MODEL } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import { extractMeasurements } from '@/lib/metrics'
@@ -816,16 +816,18 @@ async function checkDuplicatesAndSave(
   const endDate = new Date(docDate)
   endDate.setDate(endDate.getDate() + 7)
 
-  const similar = await prisma.document.findMany({
-    where: {
-      date: {
-        gte: startDate,
-        lte: endDate,
+  const similar = await withDbRetry(() =>
+    prisma.document.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
       },
-    },
-    orderBy: { date: 'desc' },
-    take: 20,
-  })
+      orderBy: { date: 'desc' },
+      take: 20,
+    })
+  )
 
   // Улучшенная проверка дубликатов: врач+дата, fuzzy заключение, keyValues
   const duplicateResult = findDuplicate(
@@ -947,47 +949,49 @@ async function checkDuplicatesAndSave(
       ? dynamicMeasurements 
       : measurements.map(m => ({ ...m, date: docDate }))
     
-    const document = await prisma.document.create({
-      data: {
-        date: docDate,
-        category: documentData.category,
-        subtype: documentData.subtype,
-        title: documentData.title,
-        doctor: documentData.doctor,
-        specialty: documentData.specialty,
-        clinic: documentData.clinic,
-        summary: documentData.summary,
-        conclusion: documentData.conclusion,
-        recommendations: documentData.recommendations,
-        content: documentData.content,
-        fileUrl: documentData.fileUrl,
-        fileName: documentData.fileName,
-        fileType: documentData.fileType,
-        tags: documentData.tags,
-        keyValues: documentData.keyValues,
-        // Создаём связанные измерения
-        measurements: {
-          create: allMeasurements.map(m => {
-            const base = {
-              name: m.name,
-              value: m.value,
-              unit: m.unit,
-              date: 'date' in m ? (m as { date: Date }).date : docDate,
-            }
-            // Добавляем normalMin/normalMax/isAbnormal если есть (из extractMeasurements)
-            if ('normalMin' in m) {
-              return {
-                ...base,
-                normalMin: (m as { normalMin?: number }).normalMin,
-                normalMax: (m as { normalMax?: number }).normalMax,
-                isAbnormal: (m as { isAbnormal?: boolean }).isAbnormal,
+    const document = await withDbRetry(() =>
+      prisma.document.create({
+        data: {
+          date: docDate,
+          category: documentData.category,
+          subtype: documentData.subtype,
+          title: documentData.title,
+          doctor: documentData.doctor,
+          specialty: documentData.specialty,
+          clinic: documentData.clinic,
+          summary: documentData.summary,
+          conclusion: documentData.conclusion,
+          recommendations: documentData.recommendations,
+          content: documentData.content,
+          fileUrl: documentData.fileUrl,
+          fileName: documentData.fileName,
+          fileType: documentData.fileType,
+          tags: documentData.tags,
+          keyValues: documentData.keyValues,
+          // Создаём связанные измерения
+          measurements: {
+            create: allMeasurements.map(m => {
+              const base = {
+                name: m.name,
+                value: m.value,
+                unit: m.unit,
+                date: 'date' in m ? (m as { date: Date }).date : docDate,
               }
-            }
-            return base
-          }),
+              // Добавляем normalMin/normalMax/isAbnormal если есть (из extractMeasurements)
+              if ('normalMin' in m) {
+                return {
+                  ...base,
+                  normalMin: (m as { normalMin?: number }).normalMin,
+                  normalMax: (m as { normalMax?: number }).normalMax,
+                  isAbnormal: (m as { isAbnormal?: boolean }).isAbnormal,
+                }
+              }
+              return base
+            }),
+          },
         },
-      },
-    })
+      })
+    )
 
     // Создаём процедуры, если есть
     if (documentData.procedures && documentData.procedures.length > 0) {

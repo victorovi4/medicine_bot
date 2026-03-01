@@ -60,3 +60,37 @@ export function getPrismaClient(options?: { testMode?: boolean }): PrismaClient 
 
   return prisma
 }
+
+/**
+ * Выполняет БД-операцию с retry при ошибках соединения.
+ * Используется после длительных операций (AI-анализ), когда
+ * соединение с PostgreSQL может протухнуть.
+ */
+export async function withDbRetry<T>(
+  fn: () => Promise<T>,
+  client: PrismaClient = prisma,
+  maxRetries = 2
+): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error: unknown) {
+      const isConnectionError =
+        error instanceof Error &&
+        (error.message.includes('Server has closed the connection') ||
+         error.message.includes('Connection pool timeout') ||
+         error.message.includes('Can\'t reach database server') ||
+         error.message.includes('Connection refused') ||
+         error.message.includes('Connection terminated unexpectedly'))
+
+      if (!isConnectionError || attempt === maxRetries) {
+        throw error
+      }
+
+      console.warn(`DB connection error (attempt ${attempt + 1}/${maxRetries + 1}), reconnecting...`)
+      await client.$disconnect()
+      await client.$connect()
+    }
+  }
+  throw new Error('withDbRetry: unreachable')
+}
