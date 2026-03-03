@@ -3,6 +3,7 @@ import { prisma, withDbRetry } from '@/lib/db'
 import { analyzeDocument } from '@/lib/claude'
 
 const BACKFILL_ERROR_MARKER = '[backfill_error]'
+const BACKFILL_PROCESSING_MARKER = '[backfill_processing]'
 
 /**
  * GET /api/backfill?secret=...
@@ -16,10 +17,15 @@ export async function GET(request: NextRequest) {
 
   const [withContent, withoutContent, withError] = await Promise.all([
     prisma.document.count({
-      where: { content: { not: null }, NOT: { content: BACKFILL_ERROR_MARKER } },
+      where: {
+        content: { not: null },
+        NOT: { content: { in: [BACKFILL_ERROR_MARKER, BACKFILL_PROCESSING_MARKER] } },
+      },
     }),
     prisma.document.count({ where: { content: null, fileUrl: { not: null } } }),
-    prisma.document.count({ where: { content: BACKFILL_ERROR_MARKER } }),
+    prisma.document.count({
+      where: { content: { in: [BACKFILL_ERROR_MARKER, BACKFILL_PROCESSING_MARKER] } },
+    }),
   ])
 
   const total = withContent + withoutContent + withError
@@ -50,7 +56,7 @@ export async function POST(request: NextRequest) {
 
   // Найти документы для обработки
   const whereClause = retry
-    ? { content: BACKFILL_ERROR_MARKER, fileUrl: { not: null } }
+    ? { content: { in: [BACKFILL_ERROR_MARKER, BACKFILL_PROCESSING_MARKER] }, fileUrl: { not: null } }
     : { content: null, fileUrl: { not: null } }
 
   const documents = await prisma.document.findMany({
@@ -86,12 +92,19 @@ export async function POST(request: NextRequest) {
 
   for (const doc of documents) {
     try {
+      // Помечаем "в процессе" ДО вызова AI — если Vercel убьёт функцию по таймауту,
+      // документ не попадёт обратно в очередь (content уже не null)
+      await prisma.document.update({
+        where: { id: doc.id },
+        data: { content: BACKFILL_PROCESSING_MARKER },
+      })
+
       console.log(`[backfill] Analyzing: ${doc.title} (${doc.id})`)
 
       const result = await analyzeDocument(doc.fileUrl!, doc.fileType || 'application/pdf')
 
       const updateData: Record<string, unknown> = {
-        content: result.fullText || null,
+        content: result.fullText || result.summary || '[no text extracted]',
       }
 
       // Дополняем только пустые поля
