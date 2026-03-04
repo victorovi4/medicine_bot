@@ -13,9 +13,12 @@ function getClient(): Anthropic {
     if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error('ANTHROPIC_API_KEY is not configured')
     }
+    const timeoutMs = process.env.ANTHROPIC_TIMEOUT
+      ? parseInt(process.env.ANTHROPIC_TIMEOUT) * 1000
+      : 45 * 1000  // 45с по умолчанию (Vercel timeout = 60с)
     _client = new Anthropic({
       maxRetries: 2,           // retry на 429/529 с exponential backoff
-      timeout: 45 * 1000,      // 45с на одну попытку (Vercel timeout = 60с)
+      timeout: timeoutMs,
     })
   }
   return _client
