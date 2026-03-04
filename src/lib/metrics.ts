@@ -138,9 +138,10 @@ export function getMetricConfig(name: string): MetricConfig | null {
   if (METRICS_CONFIG[name]) {
     return METRICS_CONFIG[name]
   }
-  
-  // Поиск по алиасам
+
   const nameLower = name.toLowerCase().trim()
+
+  // Поиск по точному совпадению ключа/алиаса
   for (const [key, config] of Object.entries(METRICS_CONFIG)) {
     if (key.toLowerCase() === nameLower) {
       return config
@@ -151,7 +152,25 @@ export function getMetricConfig(name: string): MetricConfig | null {
       }
     }
   }
-  
+
+  // Частичное совпадение: "Гемоглобин (HGB)" начинается с "Гемоглобин"
+  // или содержит алиас в скобках: "Лейкоциты (WBC)" → алиас "WBC"
+  for (const [key, config] of Object.entries(METRICS_CONFIG)) {
+    if (nameLower.startsWith(key.toLowerCase())) {
+      return config
+    }
+    for (const alias of config.aliases) {
+      const aliasLower = alias.toLowerCase()
+      if (nameLower.startsWith(aliasLower + ' ') || nameLower.startsWith(aliasLower + '(')) {
+        return config
+      }
+      // "Название (ALIAS)" — алиас в скобках
+      if (nameLower.includes('(' + aliasLower + ')')) {
+        return config
+      }
+    }
+  }
+
   return null
 }
 

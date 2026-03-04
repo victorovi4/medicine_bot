@@ -95,6 +95,13 @@ describe('getMetricConfig', () => {
     expect(getMetricConfig('hgb')?.name).toBe('Гемоглобин')
   })
 
+  it('должен находить по частичному совпадению "Название (АББР)"', () => {
+    expect(getMetricConfig('Гемоглобин (HGB)')?.name).toBe('Гемоглобин')
+    expect(getMetricConfig('Лейкоциты (WBC)')?.name).toBe('Лейкоциты')
+    expect(getMetricConfig('Тромбоциты (PLT)')?.name).toBe('Тромбоциты')
+    expect(getMetricConfig('Эритроциты (RBC)')).toBeNull() // не отслеживаем
+  })
+
   it('должен возвращать null для неизвестных показателей', () => {
     expect(getMetricConfig('Неизвестный показатель')).toBeNull()
     expect(getMetricConfig('')).toBeNull()
@@ -206,6 +213,25 @@ describe('extractMeasurements', () => {
   it('должен возвращать пустой массив для null/undefined', () => {
     expect(extractMeasurements(null)).toEqual([])
     expect(extractMeasurements(undefined)).toEqual([])
+  })
+
+  it('должен извлекать показатели в формате "Название (АББР)"', () => {
+    const keyValues = {
+      'Гемоглобин (HGB)': '85 г/л [126-174]',
+      'Лейкоциты (WBC)': '5.15 *10^9/л [4.0-10.0]',
+      'Тромбоциты (PLT)': '346 *10^9/л [150-400]',
+      'Гематокрит (HCT)': '27.2 % [37-51]', // не отслеживается
+    }
+    const result = extractMeasurements(keyValues)
+    const names = result.map(m => m.name)
+    expect(names).toContain('Гемоглобин')
+    expect(names).toContain('Лейкоциты')
+    expect(names).toContain('Тромбоциты')
+    expect(names).not.toContain('Гематокрит')
+    const hb = result.find(m => m.name === 'Гемоглобин')!
+    expect(hb.value).toBe(85)
+    expect(hb.normalMin).toBe(126)
+    expect(hb.normalMax).toBe(174)
   })
 
   it('должен пропускать нечисловые значения', () => {
