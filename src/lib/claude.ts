@@ -330,19 +330,29 @@ async function analyzeText(text: string): Promise<AnalysisResult> {
 
 /**
  * Анализирует RTF-файл: извлекает текст и отправляет на анализ.
+ * fullText берём из экстрактора напрямую — не просим Claude перепечатывать.
+ * Для AI-анализа ограничиваем текст 15К символов (вписывается в 60с timeout).
  */
 async function analyzeRtf(rtfUrl: string): Promise<AnalysisResult> {
   const response = await fetch(rtfUrl)
   const arrayBuffer = await response.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  const text = extractRtfText(buffer)
-  if (!text || text.length < 50) {
+  const fullText = extractRtfText(buffer)
+  if (!fullText || fullText.length < 50) {
     throw new Error('RTF: не удалось извлечь текст')
   }
 
-  console.log(`RTF text extracted: ${text.length} chars, using text-only analysis`)
-  return analyzeText(text)
+  // Для AI-анализа обрезаем до 15K (хватит для метаданных, keyValues, summary).
+  // fullText уже есть — Claude не нужно его повторять.
+  const textForAi = fullText.length > 15000
+    ? fullText.substring(0, 15000) + '\n\n[...текст обрезан, полный текст сохранён...]'
+    : fullText
+
+  console.log(`RTF text extracted: ${fullText.length} chars, sending ${textForAi.length} to AI`)
+  const result = await analyzeText(textForAi)
+  result.fullText = fullText
+  return result
 }
 
 /**
