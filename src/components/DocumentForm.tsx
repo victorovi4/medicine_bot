@@ -328,11 +328,11 @@ export function DocumentForm({ initialData, mode = 'create' }: DocumentFormProps
   return (
     <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl">
       <div className="space-y-2">
-        <Label>Файл документа (скан, фото, PDF)</Label>
+        <Label>Файл документа (скан, фото, PDF, RTF)</Label>
         <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
           <Input
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.heic,.webp"
+            accept=".pdf,.jpg,.jpeg,.png,.heic,.webp,.rtf"
             onChange={handleFileUpload}
             disabled={uploadingFile || analyzing}
             className="hidden"

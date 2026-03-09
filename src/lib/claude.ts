@@ -197,6 +197,10 @@ export async function analyzeDocument(
     return analyzePdf(fileUrl)
   }
 
+  if (fileType === 'application/rtf' || fileType === 'text/rtf') {
+    return analyzeRtf(fileUrl)
+  }
+
   throw new Error(`Unsupported file type: ${fileType}`)
 }
 
@@ -322,6 +326,148 @@ async function analyzeText(text: string): Promise<AnalysisResult> {
 
   const textContent = extractTextFromResponse(response)
   return parseAnalysisJson(textContent)
+}
+
+/**
+ * Анализирует RTF-файл: извлекает текст и отправляет на анализ.
+ */
+async function analyzeRtf(rtfUrl: string): Promise<AnalysisResult> {
+  const response = await fetch(rtfUrl)
+  const arrayBuffer = await response.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+
+  const text = extractRtfText(buffer)
+  if (!text || text.length < 50) {
+    throw new Error('RTF: не удалось извлечь текст')
+  }
+
+  console.log(`RTF text extracted: ${text.length} chars, using text-only analysis`)
+  return analyzeText(text)
+}
+
+/**
+ * Извлекает плоский текст из RTF-буфера.
+ * Обрабатывает Windows-1251 (Cyrillic), Unicode-escape, группы, картинки.
+ */
+function extractRtfText(buffer: Buffer): string {
+  const rtf = buffer.toString('binary')
+
+  // Windows-1251 → Unicode для кириллицы и спецсимволов
+  const CP1251: Record<number, number> = {
+    0x80:0x0402,0x81:0x0403,0x82:0x201A,0x83:0x0453,0x84:0x201E,0x85:0x2026,
+    0x86:0x2020,0x87:0x2021,0x88:0x20AC,0x89:0x2030,0x8A:0x0409,0x8B:0x2039,
+    0x8C:0x040A,0x8D:0x040C,0x8E:0x040B,0x8F:0x040F,0x90:0x0452,0x91:0x2018,
+    0x92:0x2019,0x93:0x201C,0x94:0x201D,0x95:0x2022,0x96:0x2013,0x97:0x2014,
+    0x99:0x2122,0x9A:0x0459,0x9B:0x203A,0x9C:0x045A,0x9D:0x045C,0x9E:0x045B,
+    0x9F:0x045F,0xA0:0x00A0,0xA1:0x040E,0xA2:0x045E,0xA3:0x0408,0xA4:0x00A4,
+    0xA5:0x0490,0xA6:0x00A6,0xA7:0x00A7,0xA8:0x0401,0xA9:0x00A9,0xAA:0x0404,
+    0xAB:0x00AB,0xAC:0x00AC,0xAD:0x00AD,0xAE:0x00AE,0xAF:0x0407,0xB0:0x00B0,
+    0xB1:0x00B1,0xB2:0x0406,0xB3:0x0456,0xB4:0x0491,0xB5:0x00B5,0xB6:0x00B6,
+    0xB7:0x00B7,0xB8:0x0451,0xB9:0x2116,0xBA:0x0454,0xBB:0x00BB,0xBC:0x0458,
+    0xBD:0x0405,0xBE:0x0455,0xBF:0x0457,
+  }
+  // 0xC0..0xFF → U+0410..U+044F (А..я)
+  for (let i = 0xC0; i <= 0xFF; i++) CP1251[i] = 0x0410 + (i - 0xC0)
+
+  function cp1251Char(code: number): string {
+    if (CP1251[code]) return String.fromCodePoint(CP1251[code])
+    if (code >= 0x20 && code < 0x80) return String.fromCharCode(code)
+    return ''
+  }
+
+  // Группы, содержимое которых пропускаем целиком
+  const SKIP = new Set([
+    'fonttbl','colortbl','stylesheet','info','pict','shppict','blipuid',
+    'panose','falt','xmlnstbl','defchp','defpap','rsidtbl','mmathPr',
+    'wgrffmtfilter','fchars','lchars','datafield','fldinst',
+    'pnseclvl','ftnsep','ftnsepc','aftnsep','aftnsepc',
+    'headerr','footerr','header','footer',
+  ])
+
+  let out = ''
+  let i = 0
+  let skip = 0          // >0 → внутри пропускаемой группы
+
+  while (i < rtf.length) {
+    const ch = rtf[i]
+
+    if (ch === '{') { if (skip > 0) skip++; i++; continue }
+    if (ch === '}') {
+      if (skip > 0) skip--
+      else out += '' // group end, no action
+      i++; continue
+    }
+    if (skip > 0) { i++; continue }
+
+    if (ch === '\\') {
+      i++
+      if (i >= rtf.length) break
+      const c2 = rtf[i]
+
+      // \'XX hex escape
+      if (c2 === "'") {
+        const hex = rtf.substring(i + 1, i + 3)
+        i += 3
+        out += cp1251Char(parseInt(hex, 16))
+        continue
+      }
+
+      // \uN unicode escape
+      if (c2 === 'u' && /\d|-/.test(rtf[i + 1] || '')) {
+        const m = rtf.substring(i).match(/^u(-?\d+)/)
+        if (m) {
+          let code = parseInt(m[1])
+          if (code < 0) code += 65536
+          out += String.fromCodePoint(code)
+          i += m[0].length
+          // Skip replacement character(s)
+          if (rtf[i] === ' ') i++
+          else if (rtf[i] === '\\' && rtf[i + 1] === "'") i += 4
+          else if (rtf[i] === '?') i++
+          continue
+        }
+      }
+
+      // \* ignorable destination
+      if (c2 === '*') {
+        i++
+        // peek next control word
+        const dm = rtf.substring(i).match(/^\\([a-z]+)/i)
+        if (dm && SKIP.has(dm[1])) { skip = 1 }
+        continue
+      }
+
+      // Literal escapes
+      if (c2 === '\\' || c2 === '{' || c2 === '}') { out += c2; i++; continue }
+      if (c2 === '~') { out += '\u00A0'; i++; continue }
+      if (c2 === '_') { out += '\u2011'; i++; continue }
+      if (c2 === '-') { i++; continue } // optional hyphen
+
+      // Control word: \word[-]N[ ]
+      const wm = rtf.substring(i).match(/^([a-z]+)(-?\d+)?[ ]?/i)
+      if (wm) {
+        const word = wm[1].toLowerCase()
+        i += wm[0].length
+        if (SKIP.has(word)) { skip = 1; continue }
+        if (word === 'par' || word === 'line') out += '\n'
+        else if (word === 'tab') out += '\t'
+        else if (word === 'cell') out += '\t'
+        else if (word === 'row') out += '\n'
+        continue
+      }
+
+      i++ // unknown
+      continue
+    }
+
+    // Ignore RTF line breaks (not semantic)
+    if (ch === '\r' || ch === '\n') { i++; continue }
+
+    out += ch
+    i++
+  }
+
+  return out.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+$/gm, '').replace(/^[ \t]+$/gm, '').trim()
 }
 
 /**

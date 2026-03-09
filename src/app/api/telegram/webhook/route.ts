@@ -755,7 +755,7 @@ async function processDocument(
   const mimeType = doc.mime_type || 'application/octet-stream'
   const fileName = doc.file_name || 'document'
 
-  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'application/rtf', 'text/rtf']
   const isAllowed = allowedTypes.some((t) => mimeType.includes(t.split('/')[1]))
 
   if (!isAllowed) {
