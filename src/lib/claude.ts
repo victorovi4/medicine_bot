@@ -392,6 +392,10 @@ function extractRtfText(buffer: Buffer): string {
     'wgrffmtfilter','fchars','lchars','datafield','fldinst',
     'pnseclvl','ftnsep','ftnsepc','aftnsep','aftnsepc',
     'headerr','footerr','header','footer',
+    // Word-специфичные группы с бинарными/служебными данными
+    'themedata','colorschememapping','datastore','latentstyles',
+    'listtable','listoverridetable','revtbl','pgptbl','picprop',
+    'objdata','objclass','result',
   ])
 
   let out = ''
