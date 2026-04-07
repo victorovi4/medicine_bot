@@ -8,7 +8,7 @@ export const CHAT_MODEL = 'claude-sonnet-4-6'        // для чата и ан�
 // Ленивая инициализация клиента
 let _client: Anthropic | null = null
 
-function getClient(): Anthropic {
+export function getClient(): Anthropic {
   if (!_client) {
     if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error('ANTHROPIC_API_KEY is not configured')
@@ -187,14 +187,15 @@ const ANALYSIS_PROMPT = `Ты — медицинский ассистент, а�
  */
 export async function analyzeDocument(
   fileUrl: string,
-  fileType: string
+  fileType: string,
+  preloadedBuffer?: Buffer
 ): Promise<AnalysisResult> {
   if (fileType.startsWith('image/')) {
     return analyzeImage(fileUrl, fileType)
   }
 
   if (fileType === 'application/pdf') {
-    return analyzePdf(fileUrl)
+    return analyzePdf(fileUrl, preloadedBuffer)
   }
 
   if (fileType === 'application/rtf' || fileType === 'text/rtf') {
@@ -489,10 +490,8 @@ function extractRtfText(buffer: Buffer): string {
  * Стратегия: сначала извлечь текст (быстро, работает для OCR-PDF),
  * если текста нет — отправить постранично через Vision.
  */
-async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
-  const response = await fetch(pdfUrl)
-  const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+async function analyzePdf(pdfUrl: string, preloadedBuffer?: Buffer): Promise<AnalysisResult> {
+  const buffer = preloadedBuffer ?? Buffer.from(await (await fetch(pdfUrl)).arrayBuffer())
   const sizeMB = buffer.length / (1024 * 1024)
 
   // 1. Попытка извлечь текст из PDF (OCR-слой)
@@ -528,47 +527,14 @@ async function analyzePdf(pdfUrl: string): Promise<AnalysisResult> {
 }
 
 /**
- * Разбивает PDF на отдельные страницы и отправляет через Vision API.
- * Anthropic SDK поддерживает PDF через document type.
+ * Отправляет PDF целиком через Anthropic document type (без разбивки по страницам).
+ * Anthropic поддерживает PDF до 100 страниц нативно — разбивка не нужна.
  */
 async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
-  const { PDFDocument } = await import('pdf-lib')
-  const pdfDoc = await PDFDocument.load(new Uint8Array(buffer))
-  const pageCount = pdfDoc.getPageCount()
+  const sizeMB = buffer.length / (1024 * 1024)
+  const pdfBase64 = buffer.toString('base64')
 
-  // Ограничиваем до 15 страниц
-  const maxPages = Math.min(pageCount, 15)
-  console.log(`Splitting PDF: ${pageCount} pages, processing ${maxPages}`)
-
-  const pageContents: Anthropic.Messages.ContentBlockParam[] = []
-
-  for (let i = 0; i < maxPages; i++) {
-    const singleDoc = await PDFDocument.create()
-    const [copiedPage] = await singleDoc.copyPages(pdfDoc, [i])
-    singleDoc.addPage(copiedPage)
-    const pageBytes = await singleDoc.save()
-    const pageBase64 = Buffer.from(pageBytes).toString('base64')
-
-    pageContents.push({
-      type: 'document',
-      source: {
-        type: 'base64',
-        media_type: 'application/pdf',
-        data: pageBase64,
-      },
-    })
-  }
-
-  const multiPagePrompt = pageCount > maxPages
-    ? `Это многостраничный медицинский документ (${pageCount} страниц, показаны первые ${maxPages}).\nПроанализируй ВСЕ показанные страницы как ОДИН документ.\n\n${ANALYSIS_PROMPT}`
-    : `Это многостраничный медицинский документ из ${pageCount} страниц.\nПроанализируй ВСЕ страницы как ОДИН документ и извлеки информацию.\n\n${ANALYSIS_PROMPT}`
-
-  pageContents.push({
-    type: 'text',
-    text: multiPagePrompt,
-  })
-
-  console.log(`Sending ${maxPages} page PDFs to Anthropic API...`)
+  console.log(`Sending whole PDF (${sizeMB.toFixed(1)} MB) to Anthropic API...`)
 
   const response = await getClient().messages.create({
     model: ANALYSIS_MODEL,
@@ -576,7 +542,20 @@ async function analyzePdfByPages(buffer: Buffer): Promise<AnalysisResult> {
     messages: [
       {
         role: 'user',
-        content: pageContents,
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: pdfBase64,
+            },
+          },
+          {
+            type: 'text',
+            text: `Это медицинский документ (PDF, ${sizeMB.toFixed(1)} MB).\nПроанализируй ВСЕ страницы как ОДИН документ и извлеки информацию.\n\n${ANALYSIS_PROMPT}`,
+          },
+        ],
       },
     ],
   })

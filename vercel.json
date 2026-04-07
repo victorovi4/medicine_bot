@@ -14,6 +14,9 @@
     },
     "src/app/api/backfill/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/kr-check/route.ts": {
+      "maxDuration": 60
     }
   }
 }
