@@ -3,8 +3,10 @@ import { notFound } from 'next/navigation'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeServerComponent } from '@/lib/test-mode'
 import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
+import { hasGuidelineForPatient } from '@/lib/clinical-guidelines'
 import { PatientHeader } from '@/components/PatientHeader'
 import { DocumentActions } from '@/components/DocumentActions'
+import { KrCheckCard } from '@/components/KrCheckCard'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,7 +40,9 @@ export default async function DocumentPage({
     month: 'long',
     year: 'numeric',
   })
-  
+
+  const showKrCheck = hasGuidelineForPatient()
+
   return (
     <main className="container mx-auto px-4 py-8 max-w-4xl">
       <PatientHeader />
@@ -111,7 +115,14 @@ export default async function DocumentPage({
               <p className="text-amber-900 whitespace-pre-wrap">{document.conclusion}</p>
             </div>
           )}
-          
+
+          {/* Проверка по клиническим рекомендациям */}
+          {showKrCheck && (
+            <div className="px-6 pb-4">
+              <KrCheckCard documentId={document.id} hasGuideline={showKrCheck} />
+            </div>
+          )}
+
           {/* Рекомендации */}
           {document.recommendations && document.recommendations.length > 0 && (
             <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
