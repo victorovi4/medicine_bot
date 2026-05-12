@@ -17,6 +17,9 @@
     },
     "src/app/api/kr-check/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/documents/[id]/reanalyze/route.ts": {
+      "maxDuration": 60
     }
   }
 }
