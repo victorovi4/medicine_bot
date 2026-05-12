@@ -513,20 +513,26 @@ async function analyzePdf(pdfUrl: string, preloadedBuffer?: Buffer): Promise<Ana
   const buffer = preloadedBuffer ?? Buffer.from(await (await fetch(pdfUrl)).arrayBuffer())
   const sizeMB = buffer.length / (1024 * 1024)
 
-  // 1. Попытка извлечь текст из PDF (OCR-слой)
+  // 1. Попытка извлечь текст из PDF (OCR-слой) — с жёстким таймаутом 8с,
+  // чтобы pdf-parse не подвешивал image-only PDF на Vercel без @napi-rs/canvas.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pdfParseModule = await import('pdf-parse') as any
-    let text = ''
-    if (pdfParseModule.PDFParse) {
-      const parser = new pdfParseModule.PDFParse(new Uint8Array(buffer))
-      const result = await parser.getText()
-      text = (typeof result === 'string' ? result : result?.text ?? '').trim()
-    } else {
+    const extractText = async (): Promise<string> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pdfParseModule = await import('pdf-parse') as any
+      if (pdfParseModule.PDFParse) {
+        const parser = new pdfParseModule.PDFParse(new Uint8Array(buffer))
+        const result = await parser.getText()
+        return (typeof result === 'string' ? result : result?.text ?? '').trim()
+      }
       const pdfParse = pdfParseModule.default ?? pdfParseModule
       const pdfData = await pdfParse(buffer)
-      text = (pdfData.text ?? '').trim()
+      return (pdfData.text ?? '').trim()
     }
+
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('pdf-parse timeout 8s')), 8000)
+    )
+    const text = await Promise.race([extractText(), timeout])
 
     // Фильтруем фейковый текст (AnyScanner добавляет только водяной знак)
     const cleanText = text.replace(/AnyScanner/gi, '').replace(/--\s*\d+\s*of\s*\d+\s*--/g, '').trim()
@@ -537,7 +543,7 @@ async function analyzePdf(pdfUrl: string, preloadedBuffer?: Buffer): Promise<Ana
     }
     console.log(`PDF text too short after cleanup (${cleanText?.length || 0} chars), falling back to vision`)
   } catch (err) {
-    console.log('PDF text extraction failed:', err instanceof Error ? err.message : err)
+    console.log('PDF text extraction failed/timeout:', err instanceof Error ? err.message : err)
   }
 
   // 2. Vision-подход: разбиваем PDF на страницы и отправляем как изображения
