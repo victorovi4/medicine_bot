@@ -4,6 +4,7 @@ import { isTestModeRequest } from '@/lib/test-mode'
 import { ANALYSIS_MODEL, getClient } from '@/lib/claude'
 import { PATIENT, getFullName, getAge } from '@/lib/patient'
 import { getGuidelineForPatient } from '@/lib/clinical-guidelines'
+import { buildMedicalContext } from '@/lib/context'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,8 +55,11 @@ export async function POST(request: NextRequest) {
       orderBy: { startDate: 'desc' },
     })
 
+    // Полная медицинская история пациента (чтобы агент знал про все обследования и лечение)
+    const fullMedicalContext = await buildMedicalContext(prisma)
+
     // Построить контекст пациента
-    const patientContext = buildPatientContext(document, medications)
+    const patientContext = buildPatientContext(document, medications, fullMedicalContext)
 
     // Системный промпт с полным текстом КР
     const systemPrompt = buildSystemPrompt(guideline.text)
@@ -140,8 +144,9 @@ ${guidelineText}
 1. **Обследования**: Проверь, все ли рекомендованные обследования назначены/проведены. Например, если КР рекомендует ПЭТ-КТ при определённой стадии — упомяни это.
 2. **Назначения**: Сверь назначенную терапию с рекомендациями КР. Отметь соответствия и расхождения.
 3. **Сроки**: Проверь соблюдение рекомендованных интервалов обследований и контроля.
-4. **Пропущенные исследования**: Укажи важные обследования, которые рекомендованы КР, но не упомянуты в документе.
+4. **Пропущенные исследования**: Укажи важные обследования, которые рекомендованы КР, но не упомянуты в документе. ВАЖНО: проверь полную медицинскую историю пациента — обследование могло быть проведено ранее (в другом документе/учреждении).
 5. **Стадирование**: Если есть данные о стадии, проверь соответствие рекомендованного лечения для этой стадии.
+6. **Контекст лечения**: Учитывай полную историю пациента. Если в проверяемом документе не упомянута терапия, но она назначена в другом документе — это НЕ пропуск.
 
 ## Формат ответа
 
@@ -187,7 +192,8 @@ function buildPatientContext(
     measurements: { name: string; value: number; unit: string }[]
     procedures: { name: string; type: string; date: Date }[]
   },
-  medications: { name: string; dosage: string | null; frequency: string | null }[]
+  medications: { name: string; dosage: string | null; frequency: string | null }[],
+  fullMedicalContext?: string
 ): string {
   const parts: string[] = []
 
@@ -271,6 +277,21 @@ function buildPatientContext(
   } else if (document.summary) {
     parts.push(`\n### Резюме документа`)
     parts.push(document.summary)
+  }
+
+  // Полная медицинская история — чтобы агент знал про все предыдущие обследования и лечение
+  if (fullMedicalContext) {
+    parts.push(`\n## Полная медицинская история пациента`)
+    parts.push(`(Используй для контекста: какие обследования уже проведены, какое лечение назначено ранее)`)
+    // Ограничиваем чтобы вместе с КР не превысить контекст
+    const maxContextLen = 20000
+    if (fullMedicalContext.length > maxContextLen) {
+      // Берём хвост: buildMedicalContext() выводит документы хронологически (старые первыми),
+      // а лекарства/процедуры идут в конце — именно они нужны КР-проверке в первую очередь.
+      parts.push('[...история обрезана...]\n\n' + fullMedicalContext.slice(-maxContextLen))
+    } else {
+      parts.push(fullMedicalContext)
+    }
   }
 
   return parts.join('\n')

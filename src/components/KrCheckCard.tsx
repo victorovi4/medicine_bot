@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 
 interface KrCheckItem {
-  status: 'ok' | 'warning' | 'error'
+  status: 'ok' | 'warning' | 'error' | 'missing' | 'info'
   title: string
   description: string
   krReference: string
@@ -22,11 +22,6 @@ interface KrCheckItem {
 
 interface KrCheckResult {
   items: KrCheckItem[]
-  summary: {
-    ok: number
-    warning: number
-    error: number
-  }
 }
 
 interface KrCheckCardProps {
@@ -34,7 +29,13 @@ interface KrCheckCardProps {
   hasGuideline: boolean
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, {
+  icon: typeof CheckCircle2
+  bg: string
+  border: string
+  text: string
+  label: string
+}> = {
   ok: {
     icon: CheckCircle2,
     bg: 'bg-green-950/50',
@@ -56,7 +57,21 @@ const STATUS_CONFIG = {
     text: 'text-red-500',
     label: 'расхождений',
   },
-} as const
+  missing: {
+    icon: XCircle,
+    bg: 'bg-red-950/50',
+    border: 'border-l-red-500',
+    text: 'text-red-500',
+    label: 'пропущено',
+  },
+  info: {
+    icon: ClipboardCheck,
+    bg: 'bg-blue-950/50',
+    border: 'border-l-blue-500',
+    text: 'text-blue-500',
+    label: 'информация',
+  },
+}
 
 export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
   const [loading, setLoading] = useState(false)
@@ -190,7 +205,12 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
   // Result state
   if (!result) return null
 
-  const { summary, items } = result
+  const { items } = result
+  const summary = {
+    ok: items.filter(i => i.status === 'ok').length,
+    warning: items.filter(i => i.status === 'warning').length,
+    error: items.filter(i => i.status === 'error' || i.status === 'missing').length,
+  }
 
   return (
     <Card className="border-slate-700 bg-slate-900">
@@ -206,7 +226,7 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
         {/* Items */}
         <div className="space-y-2 mb-4">
           {items.map((item, idx) => {
-            const config = STATUS_CONFIG[item.status]
+            const config = STATUS_CONFIG[item.status] || STATUS_CONFIG.info
             const Icon = config.icon
             return (
               <div
