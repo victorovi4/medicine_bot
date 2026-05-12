@@ -3,7 +3,7 @@ import { after } from 'next/server'
 import { put } from '@vercel/blob'
 import { PDFDocument } from 'pdf-lib'
 import { prisma, withDbRetry } from '@/lib/db'
-import { analyzeDocument, analyzeMultipleImages, AnalysisResult, generateWithClaude, ANALYSIS_MODEL } from '@/lib/claude'
+import { analyzeDocument, AnalysisResult, generateWithClaude, ANALYSIS_MODEL } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import { extractMeasurements } from '@/lib/metrics'
 import { findDuplicate } from '@/lib/duplicates'
@@ -717,23 +717,23 @@ async function processBatch(chatId: number): Promise<void> {
     }
     
     const pdfBytes = await pdfDoc.save()
-    
-    // Загружаем PDF в Blob (конвертируем Uint8Array в Buffer)
+    const pdfBuffer = Buffer.from(pdfBytes)
+
+    // Загружаем PDF в Blob
     const timestamp = Date.now()
     const blobName = `documents/tg-${timestamp}-combined.pdf`
-    
-    const pdfBlob = await put(blobName, Buffer.from(pdfBytes), {
+
+    const pdfBlob = await put(blobName, pdfBuffer, {
       access: 'public',
       contentType: 'application/pdf',
     })
-    
+
     console.log('Created combined PDF:', pdfBlob.url)
 
     await sendMessage(chatId, '🤖 AI анализирует документ...')
 
-    // AI-анализ всех страниц
-    const images = pages.map((p) => ({ url: p.fileUrl, mediaType: p.fileType }))
-    const analysis = await analyzeMultipleImages(images)
+    // AI-анализ через уже готовый PDF-буфер (без повторного скачивания 5 фото)
+    const analysis = await analyzeDocument(pdfBlob.url, 'application/pdf', pdfBuffer)
 
     // Сохраняем с URL объединённого PDF
     await checkDuplicatesAndSave(
