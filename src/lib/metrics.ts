@@ -183,7 +183,8 @@ export function getCanonicalMetricName(name: string): string | null {
 }
 
 /**
- * Парсит строку вида "4.5 нг/мл" или "130 г/л [130-160]" в { value, unit, normalMin, normalMax }.
+ * Парсит строку вида "4.5 нг/мл", "130 г/л [130-160]", "5.1 [< 10]", "80 [> 60]"
+ * в { value, unit, normalMin, normalMax }.
  */
 export function parseValueWithUnit(str: string): {
   value: number; unit: string; normalMin?: number; normalMax?: number
@@ -191,18 +192,28 @@ export function parseValueWithUnit(str: string): {
   if (!str) return null
 
   // Паттерн: число единицы [норма: мин-макс] или [мин-макс]
-  const match = str.match(/^([\d.,]+)\s*([^[\]]*?)(?:\s*\[(?:норма:\s*)?([\d.,]+)\s*[-–]\s*([\d.,]+)\])?$/)
-  if (!match) return null
+  const rangMatch = str.match(/^([\d.,]+)\s*([^[\]]*?)(?:\s*\[(?:норма:\s*)?([\d.,]+)\s*[-–]\s*([\d.,]+)\])?$/)
+  if (rangMatch) {
+    const value = parseFloat(rangMatch[1].replace(',', '.'))
+    if (isNaN(value)) return null
+    const unit = rangMatch[2].trim() || ''
+    const normalMin = rangMatch[3] ? parseFloat(rangMatch[3].replace(',', '.')) : undefined
+    const normalMax = rangMatch[4] ? parseFloat(rangMatch[4].replace(',', '.')) : undefined
+    return { value, unit, normalMin, normalMax }
+  }
 
-  // Заменяем запятую на точку для парсинга
-  const value = parseFloat(match[1].replace(',', '.'))
-  if (isNaN(value)) return null
+  // Паттерн одностороннего референса: "79 г/л [< 41]" или "5.1 [> 3.5]"
+  const boundMatch = str.match(/^([\d.,]+)\s*([^[\]]*?)\s*\[\s*([<>])\s*([\d.,]+)\s*\]$/)
+  if (boundMatch) {
+    const value = parseFloat(boundMatch[1].replace(',', '.'))
+    if (isNaN(value)) return null
+    const unit = boundMatch[2].trim() || ''
+    const bound = parseFloat(boundMatch[4].replace(',', '.'))
+    if (boundMatch[3] === '<') return { value, unit, normalMax: bound }
+    if (boundMatch[3] === '>') return { value, unit, normalMin: bound }
+  }
 
-  const unit = match[2].trim() || ''
-  const normalMin = match[3] ? parseFloat(match[3].replace(',', '.')) : undefined
-  const normalMax = match[4] ? parseFloat(match[4].replace(',', '.')) : undefined
-
-  return { value, unit, normalMin, normalMax }
+  return null
 }
 
 /**

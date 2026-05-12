@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeServerComponent } from '@/lib/test-mode'
 import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
+import { parseValueWithUnit } from '@/lib/metrics'
 import { hasGuidelineForPatient } from '@/lib/clinical-guidelines'
 import { PatientHeader } from '@/components/PatientHeader'
 import { DocumentActions } from '@/components/DocumentActions'
@@ -212,12 +213,20 @@ export default async function DocumentPage({
               <h3 className="font-semibold mb-2">Ключевые показатели</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {Object.entries(document.keyValues as Record<string, string>).map(
-                  ([key, value]) => (
-                    <div key={key} className="bg-gray-50 p-3 rounded">
-                      <p className="text-sm text-gray-500">{key}</p>
-                      <p className="font-semibold">{value}</p>
-                    </div>
-                  )
+                  ([key, value]) => {
+                    const parsed = parseValueWithUnit(value)
+                    // Показываем очищенное "значение единица" без норм из документа.
+                    // Норма [< N] / [> N] / [min-max] из OCR часто содержит ошибки.
+                    const display = parsed
+                      ? `${parsed.value} ${parsed.unit}`.trim()
+                      : value
+                    return (
+                      <div key={key} className="bg-gray-50 p-3 rounded">
+                        <p className="text-sm text-gray-500">{key}</p>
+                        <p className="font-semibold">{display}</p>
+                      </div>
+                    )
+                  }
                 )}
               </div>
             </div>
