@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { put } from '@vercel/blob'
 import { PDFDocument } from 'pdf-lib'
 import { prisma, withDbRetry } from '@/lib/db'
@@ -265,14 +266,28 @@ export async function POST(request: NextRequest) {
     }
 
     if (message.text === '/done' || message.text === '✅ Готово') {
-      await processBatch(chatId)
+      // Проверяем наличие активного batch до запуска фоновой обработки.
+      // Это предотвращает дублирующиеся вызовы (Telegram retry) после успешной обработки.
+      const hasActiveBatch = await prisma.batchPending.findFirst({
+        where: { chatId: BigInt(chatId) },
+      })
+      if (!hasActiveBatch) {
+        await sendMessage(chatId, 'ℹ️ Нет активного сбора страниц. Используйте /batch чтобы начать.', { reply_markup: MAIN_KEYBOARD })
+        return NextResponse.json({ ok: true })
+      }
+      // Обрабатываем в фоне (batch + AI-анализ может быть долгим)
+      after(async () => {
+        await processBatch(chatId)
+      })
       return NextResponse.json({ ok: true })
     }
 
     // === ВЫПИСКА 027/у ===
 
     if (message.text === '/extract' || message.text === '📋 Выписка') {
-      await generateExtract(chatId)
+      after(async () => {
+        await generateExtract(chatId)
+      })
       return NextResponse.json({ ok: true })
     }
 
@@ -481,11 +496,15 @@ export async function POST(request: NextRequest) {
       })
 
       if (batchActive) {
-        // Добавляем в batch
+        // Добавляем в batch (быстрая операция, не нужен after)
         await addToBatch(chatId, message.photo, 'image/jpeg')
       } else {
-        // Одиночное фото — обрабатываем сразу
-        await processPhoto(chatId, message.photo, message.caption)
+        // Одиночное фото — обрабатываем в фоне после ответа Telegram
+        const photos = message.photo
+        const caption = message.caption
+        after(async () => {
+          await processPhoto(chatId, photos, caption)
+        })
       }
       return NextResponse.json({ ok: true })
     }
@@ -493,7 +512,33 @@ export async function POST(request: NextRequest) {
     // === ОБРАБОТКА PDF ===
 
     if (message.document) {
-      await processDocument(chatId, message.document, message.caption)
+      const doc = message.document
+      const fileSizeMB = (doc.file_size || 0) / (1024 * 1024)
+
+      // Ограничение: файлы >5 MB не успевают обработаться в 60-секундный лимит сервера
+      if (fileSizeMB > 5) {
+        await sendMessage(
+          chatId,
+          `⚠️ Файл "${doc.file_name || 'документ'}" слишком большой (${fileSizeMB.toFixed(1)} МБ).\n\n` +
+            `Лимит для автоматической обработки — 5 МБ.\n\n` +
+            `Вы можете добавить этот документ через веб-интерфейс:\n` +
+            `🔗 ${getAppBaseUrl()}/add`
+        )
+        return NextResponse.json({ ok: true })
+      }
+
+      // Обрабатываем в фоне после ответа Telegram (предотвращает retry-loop при долгом AI-анализе)
+      const caption = message.caption
+      after(async () => {
+        try {
+          await processDocument(chatId, doc, caption)
+        } catch (error) {
+          console.error('after() document processing error:', error)
+          try {
+            await sendMessage(chatId, `❌ Ошибка обработки: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+          } catch { /* sendMessage тоже может упасть при таймауте */ }
+        }
+      })
       return NextResponse.json({ ok: true })
     }
 
@@ -626,9 +671,9 @@ async function processBatch(chatId: number): Promise<void> {
     if (hasMarker) {
       await prisma.batchPending.deleteMany({ where: { chatId: BigInt(chatId) } })
       await sendMessage(chatId, 'ℹ️ Вы не добавили ни одной страницы. Режим сбора отключён.')
-    } else {
-      await sendMessage(chatId, 'ℹ️ Нет страниц для обработки. Сначала /batch')
     }
+    // Если нет ни страниц, ни маркера — молча возвращаемся.
+    // Это дублирующийся webhook-вызов после уже завершённой обработки.
     return
   }
 
@@ -781,7 +826,7 @@ async function processDocument(
 
     await sendMessage(chatId, '🤖 AI анализирует...')
 
-    const analysis = await analyzeDocument(blob.url, mimeType)
+    const analysis = await analyzeDocument(blob.url, mimeType, fileBuffer)
 
     await checkDuplicatesAndSave(chatId, analysis, blob.url, 1, caption, fileName, mimeType)
   } catch (error) {
