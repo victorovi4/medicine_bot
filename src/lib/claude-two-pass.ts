@@ -14,7 +14,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { PATIENT, getAge } from '@/lib/patient'
-import { CHAT_MODEL, ANALYSIS_MODEL, AnalysisResult } from '@/lib/claude'
+import { ANALYSIS_MODEL, AnalysisResult } from '@/lib/claude'
 
 // ---------- Pass 1: структурированный OCR ----------
 
@@ -131,19 +131,20 @@ export async function extractStructuredData(pdfBuffer: Buffer): Promise<Extracte
   const sizeMB = pdfBuffer.length / (1024 * 1024)
   const pdfBase64 = pdfBuffer.toString('base64')
 
-  console.log(`[two-pass] Pass 1 (Sonnet OCR): sending ${sizeMB.toFixed(1)} MB PDF`)
+  console.log(`[two-pass] Pass 1 (Haiku OCR): sending ${sizeMB.toFixed(1)} MB PDF`)
   const t0 = Date.now()
 
-  // Локальный клиент без retries — на Vercel один retry убивает функцию по таймауту 60с.
-  // Лучше один заход с большим timeout, fall back наверх если упало.
+  // Hobby plan Vercel жёстко режет функции через 60с независимо от vercel.json.
+  // Использую Haiku и для Pass 1 (быстрее Sonnet, дешевле), но с детальным промптом
+  // про структуру. Sonnet вернём когда перейдём на Pro plan.
   const client = new (await import('@anthropic-ai/sdk')).default({
     maxRetries: 0,
-    timeout: 110_000, // 110с — головой даёт время Sonnet ответить на сложный PDF
+    timeout: 50_000,
   })
 
   const response = await client.messages.create({
-    model: CHAT_MODEL, // Sonnet — точнее различает таблицы и читает цифры
-    max_tokens: 8000,  // достаточно для структуры, быстрее генерация
+    model: ANALYSIS_MODEL, // Haiku — вписывается в 60с Vercel timeout
+    max_tokens: 6000,
     messages: [
       {
         role: 'user',
@@ -259,12 +260,12 @@ export async function normalizeToAnalysis(extracted: ExtractedDocument): Promise
 
   const client = new (await import('@anthropic-ai/sdk')).default({
     maxRetries: 0,
-    timeout: 90_000,
+    timeout: 25_000, // на Hobby plan общий бюджет ~55с: Pass 1 ≤30с + Pass 2 ≤25с
   })
 
   const response = await client.messages.create({
     model: ANALYSIS_MODEL,
-    max_tokens: 8000,
+    max_tokens: 6000,
     system: PASS2_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
   })
