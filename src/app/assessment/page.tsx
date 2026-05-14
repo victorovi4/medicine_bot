@@ -220,8 +220,8 @@ export default function AssessmentPage() {
     return (
       <main className="pb-8">
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-          <span className="ml-3 text-gray-600">Загрузка...</span>
+          <Loader2 className="h-8 w-8 animate-spin text-[#00d2aa]" />
+          <span className="ml-3 text-[rgba(204,232,225,0.6)]">Загрузка...</span>
         </div>
       </main>
     )
@@ -233,89 +233,85 @@ export default function AssessmentPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Stethoscope className="h-6 w-6 text-emerald-600" />
-            <h2 className="text-xl font-semibold text-gray-900">ИИ-заключение</h2>
+            <Stethoscope className="h-6 w-6 text-[#00d2aa]" />
+            <h2 className="text-xl font-semibold text-[#cce8e1]">ИИ-заключение</h2>
           </div>
-          <p className="text-gray-500 text-sm mt-1">
+          <p className="text-[rgba(204,232,225,0.5)] text-sm mt-1">
             Комплексный анализ медицинской карты
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Link href="/chat">
-            <Button variant="outline" className="text-purple-600 border-purple-200 hover:bg-purple-50">
+            <Button variant="outline" className="border-[rgba(0,210,170,0.2)] text-[#00d2aa] bg-transparent hover:bg-[rgba(0,210,170,0.08)] hover:text-[#00f0c6]">
               <MessageSquare className="h-4 w-4 mr-2" />
               Задать вопрос
             </Button>
           </Link>
-          <Button
+          <button
             onClick={generate}
             disabled={generating}
-            className="bg-emerald-600 hover:bg-emerald-700"
+            className="rounded-lg bg-[#00d2aa] px-5 py-2.5 text-sm font-semibold text-[#030b14] hover:bg-[#00f0c6] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {generating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Генерация...
-              </>
+              </span>
             ) : assessment ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
+              <span className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4" />
                 Обновить
-              </>
+              </span>
             ) : (
-              <>
-                <Stethoscope className="h-4 w-4 mr-2" />
+              <span className="flex items-center gap-2">
+                <Stethoscope className="h-4 w-4" />
                 Сгенерировать ИИ-заключение
-              </>
+              </span>
             )}
-          </Button>
+          </button>
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              <p className="text-red-600">{error}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-[rgba(255,107,107,0.2)] bg-[rgba(255,107,107,0.08)] p-4 mb-6">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-[#ff6b6b]" />
+            <p className="text-[#ff6b6b]">{error}</p>
+          </div>
+        </div>
       )}
 
       {/* Empty state */}
       {!assessment && !generating && !error && (
-        <Card className="mb-6">
-          <CardContent className="pt-6 text-center">
-            <Stethoscope className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2">Заключение ещё не сгенерировано</h3>
-            <p className="text-gray-500 mb-4">
-              ИИ проанализирует все документы, показатели, лекарства и процедуры
-              и создаст комплексное медицинское заключение.
-            </p>
-            <Button
-              onClick={generate}
-              className="bg-emerald-600 hover:bg-emerald-700"
-            >
-              <Stethoscope className="h-4 w-4 mr-2" />
+        <div className="rounded-xl border border-[rgba(0,210,170,0.09)] bg-[#060f1c] p-8 mb-6 text-center">
+          <Stethoscope className="h-12 w-12 mx-auto text-[rgba(204,232,225,0.3)] mb-4" />
+          <h3 className="text-lg font-medium text-[#cce8e1] mb-2">Заключение ещё не сгенерировано</h3>
+          <p className="text-[rgba(204,232,225,0.5)] mb-4">
+            ИИ проанализирует все документы, показатели, лекарства и процедуры
+            и создаст комплексное медицинское заключение.
+          </p>
+          <button
+            onClick={generate}
+            className="rounded-lg bg-[#00d2aa] px-5 py-2.5 text-sm font-semibold text-[#030b14] hover:bg-[#00f0c6] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Stethoscope className="h-4 w-4" />
               Сгенерировать ИИ-заключение
-            </Button>
-          </CardContent>
-        </Card>
+            </span>
+          </button>
+        </div>
       )}
 
       {/* Streaming indicator */}
       {generating && streamText.length === 0 && (
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
-              <span className="text-gray-600">Анализируем медицинскую карту...</span>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-[rgba(0,210,170,0.09)] bg-[#060f1c] p-5 mb-6">
+          <div className="flex items-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin text-[#00d2aa]" />
+            <span className="text-[rgba(204,232,225,0.6)]">Анализируем медицинскую карту...</span>
+          </div>
+        </div>
       )}
 
       {/* Sections */}
@@ -323,7 +319,7 @@ export default function AssessmentPage() {
         <div className="space-y-4">
           {/* Generated at badge */}
           {assessment && !isStreaming && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 text-[rgba(204,232,225,0.4)] text-xs font-[var(--font-geist-mono)]">
               <Clock className="h-4 w-4" />
               <span>
                 Сгенерировано: {new Date(assessment.createdAt).toLocaleString('ru-RU')}
@@ -332,51 +328,45 @@ export default function AssessmentPage() {
           )}
 
           {sections.map((section) => (
-            <Card key={section.key}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-600">{section.icon}</span>
-                  <h3 className="font-semibold text-lg">{section.title}</h3>
-                  {isStreaming && section === sections[sections.length - 1] && (
-                    <Badge variant="secondary" className="ml-auto text-xs">
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                      Генерация
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className="prose prose-sm max-w-none text-gray-700"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(section.content) }}
-                />
+            <div key={section.key} className="rounded-xl border border-[rgba(0,210,170,0.09)] bg-[#060f1c] p-5 mb-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-[#00d2aa] mb-3 section-label">
+                {section.icon}
+                <h3 className="font-semibold text-base text-[#cce8e1]">{section.title}</h3>
                 {isStreaming && section === sections[sections.length - 1] && (
-                  <span className="inline-block w-1.5 h-4 bg-emerald-600 animate-pulse ml-0.5 align-text-bottom" />
+                  <Badge variant="secondary" className="ml-auto text-xs bg-[rgba(0,210,170,0.12)] text-[#00d2aa] border-0">
+                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    Генерация
+                  </Badge>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+              <div
+                className="text-sm text-[rgba(204,232,225,0.85)] leading-relaxed [&_strong]:text-[#cce8e1] [&_ul]:list-disc [&_ul]:pl-4 [&_li]:mb-1 [&_h3]:text-[#cce8e1] [&_h3]:font-semibold [&_h3]:mt-3 [&_h3]:mb-1"
+                dangerouslySetInnerHTML={{ __html: renderMarkdown(section.content) }}
+              />
+              {isStreaming && section === sections[sections.length - 1] && (
+                <span className="inline-block w-1.5 h-4 bg-[#00d2aa] animate-pulse ml-0.5 align-text-bottom" />
+              )}
+            </div>
           ))}
         </div>
       )}
 
       {/* Fallback for streaming before any sections are parsed */}
       {isStreaming && sections.length === 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">
-              {streamText}
-              <span className="inline-block w-1.5 h-4 bg-emerald-600 animate-pulse ml-0.5 align-text-bottom" />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="rounded-xl border border-[rgba(0,210,170,0.09)] bg-[#060f1c] p-5">
+          <div className="text-sm text-[rgba(204,232,225,0.85)] leading-relaxed whitespace-pre-wrap">
+            {streamText}
+            <span className="inline-block w-1.5 h-4 bg-[#00d2aa] animate-pulse ml-0.5 align-text-bottom" />
+          </div>
+        </div>
       )}
 
       {/* Disclaimer */}
       {(assessment || isStreaming) && (
-        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+        <div className="rounded-lg border border-[rgba(0,210,170,0.09)] bg-[#0a1525] p-3 text-xs text-[rgba(204,232,225,0.4)] mt-4">
           <div className="flex items-start gap-2">
-            <Shield className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-800">
+            <Shield className="h-4 w-4 text-[rgba(204,232,225,0.3)] flex-shrink-0 mt-0.5" />
+            <p>
               Данное заключение сгенерировано ИИ и не является медицинским диагнозом.
               Оно предназначено для информационных целей и подготовки к визиту врача.
               Все медицинские решения должны приниматься квалифицированным специалистом.
