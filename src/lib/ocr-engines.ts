@@ -10,13 +10,19 @@ import { ExtractedDocument } from '@/lib/claude-two-pass'
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
 
-export type OcrEngine = 'mistral-ocr-pipeline' | 'gemini-direct' | 'pixtral-direct' | 'qwen-direct'
+export type OcrEngine =
+  | 'mistral-ocr-pipeline'      // file-parser mistral-ocr → Claude Haiku 4.5
+  | 'gemini-3-1-pro-direct'     // Gemini 3.1 Pro нативный PDF input
+  | 'gemini-3-flash-direct'     // Gemini 3 Flash Preview нативный PDF (дешёвый)
+  | 'qwen-vl-via-parser'        // Qwen 3 VL 32B + file-parser mistral-ocr
+  | 'sonnet-via-parser'         // Claude Sonnet 4.6 + file-parser mistral-ocr (сравнение нормализатора)
 
 export const ENGINE_DESCRIPTIONS: Record<OcrEngine, string> = {
-  'mistral-ocr-pipeline': 'OpenRouter file-parser (mistral-ocr) → markdown → Claude Haiku 4.5 normalize',
-  'gemini-direct': 'Gemini 3 Pro Preview (native PDF input)',
-  'pixtral-direct': 'Pixtral Large 2411 (file-parser mistral-ocr → text)',
-  'qwen-direct': 'Qwen 3 VL 32B (file-parser mistral-ocr → text)',
+  'mistral-ocr-pipeline': 'OpenRouter file-parser (mistral-ocr) → Claude Haiku 4.5 normalize',
+  'gemini-3-1-pro-direct': 'Gemini 3.1 Pro Preview (native PDF input)',
+  'gemini-3-flash-direct': 'Gemini 3 Flash Preview (native PDF input, 10x дешевле Pro)',
+  'qwen-vl-via-parser': 'Qwen 3 VL 32B Instruct + file-parser mistral-ocr',
+  'sonnet-via-parser': 'Claude Sonnet 4.6 + file-parser mistral-ocr (топовый normalize)',
 }
 
 interface OpenRouterResponse {
@@ -157,13 +163,14 @@ export async function runOcrEngine(engine: OcrEngine, pdfBuffer: Buffer): Promis
   const pdfBase64 = pdfBuffer.toString('base64')
   const t0 = Date.now()
 
-  const cfg: Record<OcrEngine, { model: string; parserEngine?: 'mistral-ocr' | 'cloudflare-ai' | 'native' }> = {
+  const cfg: Record<OcrEngine, { model: string; parserEngine?: 'mistral-ocr' | 'cloudflare-ai' | 'native'; maxTokens?: number }> = {
     'mistral-ocr-pipeline': { model: 'anthropic/claude-haiku-4.5', parserEngine: 'mistral-ocr' },
-    'gemini-direct': { model: 'google/gemini-3-pro-preview', parserEngine: 'native' },
-    'pixtral-direct': { model: 'mistralai/pixtral-large-2411', parserEngine: 'mistral-ocr' },
-    'qwen-direct': { model: 'qwen/qwen3-vl-32b-instruct', parserEngine: 'mistral-ocr' },
+    'gemini-3-1-pro-direct': { model: 'google/gemini-3.1-pro-preview', parserEngine: 'native' },
+    'gemini-3-flash-direct': { model: 'google/gemini-3-flash-preview', parserEngine: 'native' },
+    'qwen-vl-via-parser': { model: 'qwen/qwen3-vl-32b-instruct', parserEngine: 'mistral-ocr', maxTokens: 6000 },
+    'sonnet-via-parser': { model: 'anthropic/claude-sonnet-4.6', parserEngine: 'mistral-ocr' },
   }
-  const { model, parserEngine } = cfg[engine]
+  const { model, parserEngine, maxTokens } = cfg[engine]
 
   try {
     const { text, raw } = await callOpenRouter({
@@ -171,8 +178,8 @@ export async function runOcrEngine(engine: OcrEngine, pdfBuffer: Buffer): Promis
       pdfBase64,
       prompt: STRUCTURED_OCR_PROMPT,
       parserEngine,
-      maxTokens: 8000,
-      timeoutMs: 50_000,
+      maxTokens: maxTokens ?? 8000,
+      timeoutMs: 55_000,
     })
     const json = extractJson(text)
     const extracted = json ? (JSON.parse(json) as ExtractedDocument) : null

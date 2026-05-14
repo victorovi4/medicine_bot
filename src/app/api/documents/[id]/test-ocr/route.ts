@@ -7,7 +7,13 @@ import { runOcrEngine, OcrEngine, ENGINE_DESCRIPTIONS } from '@/lib/ocr-engines'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const VALID_ENGINES: OcrEngine[] = ['mistral-ocr-pipeline', 'gemini-direct', 'pixtral-direct', 'qwen-direct']
+const VALID_ENGINES: OcrEngine[] = [
+  'mistral-ocr-pipeline',
+  'gemini-3-1-pro-direct',
+  'gemini-3-flash-direct',
+  'qwen-vl-via-parser',
+  'sonnet-via-parser',
+]
 
 /**
  * Тестовый endpoint для A/B сравнения OCR-движков (через OpenRouter).
