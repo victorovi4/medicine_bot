@@ -244,29 +244,29 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full pb-4">
       {/* Chat header */}
-      <div className="flex items-center justify-between py-3 border-b border-gray-200 mb-2">
+      <div className="flex items-center justify-between py-3 border-b border-[rgba(0,210,170,0.09)] mb-2">
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-purple-600" />
-          <h2 className="font-semibold text-gray-900 truncate">
+          <MessageSquare className="h-5 w-5 text-[#00d2aa]" />
+          <h2 className="font-semibold text-[rgba(204,232,225,0.9)] truncate">
             {conversationTitle || 'Консультация ИИ'}
           </h2>
         </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
             size="sm"
             onClick={startNewConversation}
+            className="bg-[#0a1525] border border-[rgba(0,210,170,0.12)] text-[rgba(204,232,225,0.7)] hover:border-[rgba(0,210,170,0.3)] hover:bg-[#0a1525]"
           >
             <Plus className="h-4 w-4 mr-1" />
             Новый
           </Button>
           <Button
-            variant="outline"
             size="sm"
             onClick={() => {
               setShowSidebar(!showSidebar)
               if (!showSidebar) loadConversations()
             }}
+            className="bg-[#0a1525] border border-[rgba(0,210,170,0.12)] text-[rgba(204,232,225,0.7)] hover:border-[rgba(0,210,170,0.3)] hover:bg-[#0a1525]"
           >
             <History className="h-4 w-4 mr-1" />
             История
@@ -279,16 +279,16 @@ export default function ChatPage() {
         {/* Sidebar */}
         {showSidebar && (
           <div className="absolute inset-0 z-10 flex">
-            <div className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-lg">
-              <div className="flex items-center justify-between p-3 border-b">
-                <h3 className="font-medium text-sm">История разговоров</h3>
+            <div className="w-80 bg-[#060f1c] border-r border-[rgba(0,210,170,0.09)] flex flex-col shadow-lg">
+              <div className="flex items-center justify-between p-3 border-b border-[rgba(0,210,170,0.09)]">
+                <h3 className="font-medium text-sm text-[rgba(204,232,225,0.7)]">История разговоров</h3>
                 <button onClick={() => setShowSidebar(false)}>
-                  <X className="h-4 w-4 text-gray-500" />
+                  <X className="h-4 w-4 text-[rgba(204,232,225,0.5)]" />
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {conversations.length === 0 ? (
-                  <p className="text-sm text-gray-500 p-4 text-center">
+                  <p className="text-sm text-[rgba(204,232,225,0.45)] p-4 text-center">
                     Пока нет разговоров
                   </p>
                 ) : (
@@ -296,14 +296,14 @@ export default function ChatPage() {
                     <button
                       key={conv.id}
                       onClick={() => loadConversation(conv.id)}
-                      className={`w-full text-left p-3 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                        conv.id === conversationId ? 'bg-purple-50 border-l-2 border-l-purple-600' : ''
+                      className={`w-full text-left p-3 border-b border-[rgba(0,210,170,0.06)] hover:bg-[#0a1525] transition-colors ${
+                        conv.id === conversationId ? 'bg-[rgba(0,210,170,0.06)] border-l-2 border-l-[#00d2aa]' : ''
                       }`}
                     >
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="text-sm font-medium text-[rgba(204,232,225,0.8)] truncate">
                         {conv.title}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-[rgba(204,232,225,0.4)] mt-1">
                         {new Date(conv.updatedAt).toLocaleDateString('ru-RU')}{' '}
                         &middot; {conv.messageCount} сообщ.
                       </p>
@@ -317,15 +317,15 @@ export default function ChatPage() {
         )}
 
         {/* Messages area */}
-        <div className="flex-1 overflow-y-auto px-1">
+        <div className="flex-1 overflow-y-auto py-4 space-y-4 px-1">
           {/* Empty state */}
           {messages.length === 0 && !isLoading && (
             <div className="flex flex-col items-center justify-center h-full">
-              <MessageSquare className="h-12 w-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-700 mb-2">
+              <MessageSquare className="h-12 w-12 text-[rgba(0,210,170,0.3)] mb-4" />
+              <h3 className="text-lg font-medium text-[rgba(204,232,225,0.7)] mb-2">
                 Задайте вопрос по медицинской карте
               </h3>
-              <p className="text-sm text-gray-500 mb-6 text-center max-w-md">
+              <p className="text-sm text-[rgba(204,232,225,0.45)] mb-6 text-center max-w-md">
                 ИИ-ассистент видит все документы, анализы, лекарства и процедуры пациента.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full">
@@ -333,7 +333,7 @@ export default function ChatPage() {
                   <button
                     key={q}
                     onClick={() => sendMessage(q)}
-                    className="text-left p-3 rounded-lg border border-gray-200 hover:border-purple-300 hover:bg-purple-50 transition-colors text-sm text-gray-700"
+                    className="rounded-full border border-[rgba(0,210,170,0.12)] bg-[#0a1525] px-3 py-1.5 text-xs text-[rgba(204,232,225,0.55)] hover:border-[rgba(0,210,170,0.3)] hover:text-[rgba(204,232,225,0.9)] transition-all cursor-pointer text-left"
                   >
                     {q}
                   </button>
@@ -351,8 +351,8 @@ export default function ChatPage() {
               <div
                 className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                   msg.role === 'user'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-white border border-gray-200 text-gray-800'
+                    ? 'bg-[#00d2aa] text-[#030b14] font-medium rounded-br-sm'
+                    : 'bg-[#060f1c] border border-[rgba(0,210,170,0.1)] text-[rgba(204,232,225,0.9)] rounded-bl-sm'
                 }`}
               >
                 {msg.role === 'user' ? (
@@ -360,16 +360,16 @@ export default function ChatPage() {
                 ) : msg.content ? (
                   <div className="relative">
                     <div
-                      className="prose prose-sm max-w-none text-gray-700"
+                      className="prose prose-sm max-w-none text-[rgba(204,232,225,0.9)] prose-strong:text-[rgba(204,232,225,1)] prose-headings:text-[rgba(204,232,225,0.9)]"
                       dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
                     />
                     {msg.isStreaming && (
-                      <span className="inline-block w-1.5 h-4 bg-purple-600 animate-pulse ml-0.5 align-text-bottom" />
+                      <span className="inline-block w-1.5 h-4 bg-[#00d2aa] animate-pulse ml-0.5 align-text-bottom" />
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                  <div className="flex items-center gap-2 text-[rgba(204,232,225,0.4)]">
+                    <Loader2 className="h-4 w-4 animate-spin text-[#00d2aa]" />
                     <span className="text-sm">Думаю...</span>
                   </div>
                 )}
@@ -392,14 +392,14 @@ export default function ChatPage() {
 
       {/* Disclaimer */}
       {messages.length > 0 && (
-        <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-amber-700 bg-amber-50 rounded border border-amber-200 mt-2">
-          <Shield className="h-3.5 w-3.5 flex-shrink-0" />
-          <span>ИИ-ассистент не заменяет врача. Все решения принимайте с лечащим специалистом.</span>
+        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-[#0a1525] border border-[rgba(0,210,170,0.09)] rounded mt-2">
+          <Shield className="h-3.5 w-3.5 flex-shrink-0 text-[rgba(204,232,225,0.35)]" />
+          <span className="text-xs text-[rgba(204,232,225,0.45)]">ИИ-ассистент не заменяет врача. Все решения принимайте с лечащим специалистом.</span>
         </div>
       )}
 
       {/* Input area */}
-      <div className="mt-2 flex gap-2 items-end">
+      <div className="border-t border-[rgba(0,210,170,0.09)] bg-[#060f1c] px-4 py-3 mt-2 flex gap-2 items-end -mx-0 rounded-b-lg">
         <textarea
           ref={textareaRef}
           value={input}
@@ -408,12 +408,12 @@ export default function ChatPage() {
           placeholder="Задайте вопрос..."
           rows={1}
           disabled={isLoading}
-          className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:opacity-50 disabled:bg-gray-50"
+          className="w-full resize-none rounded-lg border border-[rgba(0,210,170,0.12)] bg-[#0a1525] px-3 py-2 text-sm text-[#cce8e1] placeholder:text-[rgba(204,232,225,0.3)] focus:border-[rgba(0,210,170,0.35)] focus:outline-none focus:ring-0 disabled:opacity-50 flex-1"
         />
         <Button
           onClick={() => sendMessage()}
           disabled={isLoading || !input.trim()}
-          className="bg-purple-600 hover:bg-purple-700 h-11 w-11 p-0 rounded-xl flex-shrink-0"
+          className="rounded-lg bg-[#00d2aa] px-4 py-2 text-sm font-semibold text-[#030b14] hover:bg-[#00f0c6] disabled:opacity-40 transition-colors flex-shrink-0 h-auto"
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
