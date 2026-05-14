@@ -1,7 +1,5 @@
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { FileText, Calendar, User, Building } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { getCategoryLabel, getSubtypeLabel } from '@/lib/types'
 
 interface DocumentCardProps {
@@ -19,100 +17,62 @@ interface DocumentCardProps {
   fileName?: string | null
 }
 
+const CATEGORY_STYLES: Record<string, string> = {
+  заключения: 'bg-[rgba(180,0,255,0.1)] text-[#c084fc] border-[rgba(180,0,255,0.25)]',
+  анализы:    'bg-[rgba(0,210,170,0.1)] text-[#00d2aa] border-[rgba(0,210,170,0.25)]',
+  исследования: 'bg-[rgba(59,130,246,0.1)] text-[#93c5fd] border-[rgba(59,130,246,0.25)]',
+  другое:     'bg-[#0a1525] text-[rgba(204,232,225,0.5)] border-[rgba(0,210,170,0.09)]',
+}
+
 export function DocumentCard({
-  id,
-  date,
-  category,
-  subtype,
-  title,
-  doctor,
-  specialty,
-  clinic,
-  summary,
-  tags,
-  fileUrl,
-  fileName,
+  id, date, category, subtype, title,
+  doctor, specialty, clinic, summary, fileUrl,
 }: DocumentCardProps) {
   const docDate = new Date(date)
-  const formattedDate = docDate.toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
+  const formatted = docDate.toLocaleDateString('ru-RU', {
+    day: 'numeric', month: 'long', year: 'numeric',
   })
-  
-  // Проверяем, является ли дата "сегодня" (возможно, не распознана)
-  const today = new Date()
-  const isToday = docDate.toDateString() === today.toDateString()
-  const needsDateCheck = isToday
-  
-  // Цвета для категорий
-  const categoryColors: Record<string, string> = {
-    'заключения': 'bg-purple-100 text-purple-800 border-purple-200',
-    'анализы': 'bg-green-100 text-green-800 border-green-200',
-    'исследования': 'bg-blue-100 text-blue-800 border-blue-200',
-    'другое': 'bg-gray-100 text-gray-800 border-gray-200',
-  }
-  
+  const isToday = docDate.toDateString() === new Date().toDateString()
+  const categoryStyle = CATEGORY_STYLES[category] ?? CATEGORY_STYLES['другое']
+
   return (
     <Link href={`/documents/${id}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer">
-        <CardHeader className="pb-2">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge className={categoryColors[category] || categoryColors['другое']}>
-                {getCategoryLabel(category)}
-              </Badge>
-              <Badge variant="outline">{getSubtypeLabel(subtype)}</Badge>
-              {fileUrl && <FileText className="h-4 w-4 text-gray-400" />}
-            </div>
-            <div className={`flex items-center gap-1 text-sm ${needsDateCheck ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>
-              <Calendar className="h-4 w-4" />
-              {formattedDate}
-              {needsDateCheck && <span className="text-xs">(проверить!)</span>}
-            </div>
+      <div className="group rounded-xl border border-[rgba(0,210,170,0.09)] bg-[#060f1c] p-4 transition-all duration-200 hover:border-[rgba(0,210,170,0.28)] hover:bg-[#0a1525] cursor-pointer">
+        {/* Top row — badges + date */}
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="flex flex-wrap gap-1.5">
+            <span className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-medium ${categoryStyle}`}>
+              {getCategoryLabel(category)}
+            </span>
+            <span className="inline-flex rounded-md border border-[rgba(0,210,170,0.09)] bg-[#0a1525] px-2 py-0.5 text-xs text-[rgba(204,232,225,0.45)]">
+              {getSubtypeLabel(subtype)}
+            </span>
+            {fileUrl && <FileText className="h-3.5 w-3.5 text-[rgba(204,232,225,0.3)] mt-0.5" />}
           </div>
-          <CardTitle className="text-lg mt-2">{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {doctor && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <User className="h-4 w-4" />
-                {doctor}
-              </div>
-            )}
-            {specialty && (
-              <div className="text-sm text-gray-600">
-                Специальность: {specialty}
-              </div>
-            )}
-            {clinic && (
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Building className="h-4 w-4" />
-                {clinic}
-              </div>
-            )}
-            {summary && (
-              <p className="text-sm text-gray-700 mt-2 line-clamp-2">{summary}</p>
-            )}
-            {fileName && (
-              <div className="flex items-center gap-1 text-xs text-gray-400 mt-1">
-                <FileText className="h-3 w-3" />
-                <span className="truncate">{fileName}</span>
-              </div>
-            )}
-            {tags && tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          <span className={`font-[var(--font-geist-mono)] text-xs whitespace-nowrap ${isToday ? 'text-[#f5a623]' : 'text-[rgba(204,232,225,0.35)]'}`}>
+            {formatted}{isToday && ' ⚠'}
+          </span>
+        </div>
+
+        {/* Title */}
+        <p className="text-sm font-semibold text-[rgba(204,232,225,0.9)] mb-1.5 group-hover:text-[#cce8e1]">
+          {title}
+        </p>
+
+        {/* Meta */}
+        {(doctor || clinic) && (
+          <p className="font-[var(--font-geist-mono)] text-[10px] text-[rgba(204,232,225,0.35)]">
+            {[doctor, specialty, clinic].filter(Boolean).join(' · ')}
+          </p>
+        )}
+
+        {/* Summary */}
+        {summary && (
+          <p className="mt-1.5 text-xs text-[rgba(204,232,225,0.45)] line-clamp-2">
+            {summary}
+          </p>
+        )}
+      </div>
     </Link>
   )
 }
