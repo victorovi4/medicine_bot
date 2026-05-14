@@ -6,6 +6,7 @@ import { prisma, withDbRetry } from '@/lib/db'
 import { analyzeDocument, AnalysisResult, generateWithClaude, ANALYSIS_MODEL } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import { extractMeasurements } from '@/lib/metrics'
+import { filterDuplicateMeasurements } from '@/lib/measurement-dedup'
 import { findDuplicate } from '@/lib/duplicates'
 import {
   TelegramUpdate,
@@ -990,10 +991,30 @@ async function checkDuplicatesAndSave(
     }
     
     // Объединяем: динамика имеет приоритет (больше данных)
-    const allMeasurements = dynamicMeasurements.length > 0 
-      ? dynamicMeasurements 
+    const candidateMeasurements = (dynamicMeasurements.length > 0
+      ? dynamicMeasurements
       : measurements.map(m => ({ ...m, date: docDate }))
-    
+    ).map(m => ({
+      name: m.name,
+      value: m.value,
+      unit: m.unit,
+      date: 'date' in m ? (m as { date: Date }).date : docDate,
+      normalMin: 'normalMin' in m ? (m as { normalMin?: number }).normalMin : undefined,
+      normalMax: 'normalMax' in m ? (m as { normalMax?: number }).normalMax : undefined,
+      isAbnormal: 'isAbnormal' in m ? (m as { isAbnormal?: boolean }).isAbnormal : undefined,
+    }))
+
+    // Дедуп: исключаем measurements, уже присутствующие в других документах
+    // (консультации/эпикризы часто цитируют значения из прошлых анализов).
+    const { toCreate: allMeasurements, duplicates: skippedDups } = await filterDuplicateMeasurements(
+      prisma,
+      candidateMeasurements,
+      null
+    )
+    if (skippedDups.length > 0) {
+      console.log(`[telegram:webhook] skipped ${skippedDups.length} duplicate measurements`)
+    }
+
     const document = await withDbRetry(() =>
       prisma.document.create({
         data: {
@@ -1013,26 +1034,16 @@ async function checkDuplicatesAndSave(
           fileType: documentData.fileType,
           tags: documentData.tags,
           keyValues: documentData.keyValues,
-          // Создаём связанные измерения
           measurements: {
-            create: allMeasurements.map(m => {
-              const base = {
-                name: m.name,
-                value: m.value,
-                unit: m.unit,
-                date: 'date' in m ? (m as { date: Date }).date : docDate,
-              }
-              // Добавляем normalMin/normalMax/isAbnormal если есть (из extractMeasurements)
-              if ('normalMin' in m) {
-                return {
-                  ...base,
-                  normalMin: (m as { normalMin?: number }).normalMin,
-                  normalMax: (m as { normalMax?: number }).normalMax,
-                  isAbnormal: (m as { isAbnormal?: boolean }).isAbnormal,
-                }
-              }
-              return base
-            }),
+            create: allMeasurements.map(m => ({
+              name: m.name,
+              value: m.value,
+              unit: m.unit,
+              date: m.date,
+              normalMin: m.normalMin,
+              normalMax: m.normalMax,
+              isAbnormal: m.isAbnormal,
+            })),
           },
         },
       })

@@ -4,6 +4,7 @@ import { isTestModeRequest } from '@/lib/test-mode'
 import { analyzeDocument } from '@/lib/claude'
 import { normalizeDocumentType } from '@/lib/types'
 import { extractMeasurements } from '@/lib/metrics'
+import { filterDuplicateMeasurements } from '@/lib/measurement-dedup'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -113,9 +114,21 @@ async function runReanalyze(
       }
     }
   }
-  const allMeasurements: Meas[] = dynamicMeasurements.length > 0
+  const candidateMeasurements: Meas[] = dynamicMeasurements.length > 0
     ? dynamicMeasurements
     : keyValueMeasurements.map(m => ({ ...m, date: docDate }))
+
+  // Дедуп: убираем measurements, которые уже есть в БД у других документов
+  // (консультации/эпикризы часто цитируют значения из первичных анализов).
+  const { toCreate: allMeasurements, duplicates } = await filterDuplicateMeasurements(
+    prisma,
+    candidateMeasurements,
+    id
+  )
+  if (duplicates.length > 0) {
+    console.log(`[reanalyze:${id}] skipped ${duplicates.length} duplicate measurements (already in DB from other documents)`)
+    await stage(`dedup: ${candidateMeasurements.length} → ${allMeasurements.length} (${duplicates.length} dups)`)
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.measurement.deleteMany({ where: { documentId: id } })
