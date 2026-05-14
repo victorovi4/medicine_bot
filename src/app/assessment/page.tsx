@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -84,7 +83,7 @@ function parseSections(text: string): Section[] {
 
 /** Simple markdown to HTML: bold, italic, lists, line breaks */
 function renderMarkdown(md: string): string {
-  let html = md
+  const html = md
     // Escape HTML
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
