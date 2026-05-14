@@ -285,18 +285,33 @@ export async function normalizeToAnalysis(extracted: ExtractedDocument): Promise
  */
 export async function analyzePdfTwoPass(pdfBuffer: Buffer): Promise<AnalysisResult> {
   const t0 = Date.now()
+
+  // Primary path: Mistral OCR через OpenRouter file-parser + Haiku normalization.
+  // A/B тест показал что mistral-ocr-pipeline извлекает CBC таблицу с точными HGB 82/72/110,
+  // тогда как direct Sonnet vision путал значения между колонками таблицы.
+  if (process.env.OPENROUTER_API_KEY) {
+    try {
+      const { runOcrEngine } = await import('@/lib/ocr-engines')
+      const ocrResult = await runOcrEngine('mistral-ocr-pipeline', pdfBuffer)
+      if (ocrResult.extracted && !ocrResult.error) {
+        const t1 = Date.now()
+        const analysis = await normalizeToAnalysis(ocrResult.extracted)
+        const t2 = Date.now()
+        console.log(`[two-pass:openrouter] total: Pass1 ${((t1-t0)/1000).toFixed(1)}s (${ocrResult.promptTokens}+${ocrResult.completionTokens} tok) + Pass2 ${((t2-t1)/1000).toFixed(1)}s`)
+        return analysis
+      }
+      console.log(`[two-pass:openrouter] failed (${ocrResult.error}), falling back to direct Sonnet`)
+    } catch (err) {
+      console.log(`[two-pass:openrouter] error, falling back to direct Sonnet:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  // Fallback: direct Sonnet (vision на PDF) + Haiku normalization.
   const extracted = await extractStructuredData(pdfBuffer)
   const t1 = Date.now()
   const analysis = await normalizeToAnalysis(extracted)
   const t2 = Date.now()
-  console.log(`[two-pass] total: Pass1 ${((t1-t0)/1000).toFixed(1)}s + Pass2 ${((t2-t1)/1000).toFixed(1)}s`)
-
-  // DEBUG: положим Pass 1 результат в fullText чтобы можно было увидеть
-  // что именно Haiku извлёк (раздел Tables разворачивается в начале).
-  // Это временно для диагностики, потом fullText заменится обратно на нормальный.
-  const debugPrefix = `\n\n--- DEBUG: Pass 1 extracted ---\n${JSON.stringify(extracted, null, 2)}\n--- END DEBUG ---\n\n`
-  analysis.fullText = debugPrefix + (analysis.fullText || '')
-
+  console.log(`[two-pass:direct] total: Pass1 ${((t1-t0)/1000).toFixed(1)}s + Pass2 ${((t2-t1)/1000).toFixed(1)}s`)
   return analysis
 }
 
