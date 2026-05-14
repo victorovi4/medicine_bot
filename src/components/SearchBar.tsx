@@ -146,7 +146,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
     <Link
       key={item.id}
       href={`/documents/${item.id}`}
-      className="block p-3 hover:bg-gray-50 active:bg-gray-100 border-b border-gray-100 last:border-b-0"
+      className="block px-4 py-3 border-b border-[rgba(0,210,170,0.06)] hover:bg-[#0a1525] transition-colors last:border-b-0"
       onClick={() => {
         setIsOpen(false)
         onSearchActive?.(false)
@@ -156,22 +156,22 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
         {/* Match type indicator */}
         <div className="mt-0.5 flex-shrink-0">
           {item.matchType === 'exact' && (
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CheckCircle className="h-4 w-4 text-[#00d2aa]" />
           )}
           {item.matchType === 'partial' && (
-            <FileText className="h-4 w-4 text-blue-600" />
+            <FileText className="h-4 w-4 text-[rgba(0,210,170,0.6)]" />
           )}
           {item.matchType === 'context' && (
-            <HelpCircle className="h-4 w-4 text-orange-500" />
+            <HelpCircle className="h-4 w-4 text-[rgba(204,232,225,0.4)]" />
           )}
         </div>
 
         <div className="flex-1 min-w-0">
           {/* Title */}
-          <div className="font-medium text-gray-900 truncate">{item.title}</div>
+          <div className="text-sm font-medium text-[rgba(204,232,225,0.9)] truncate">{item.title}</div>
 
           {/* Meta */}
-          <div className="flex flex-wrap gap-x-2 text-xs text-gray-500 mt-0.5">
+          <div className="flex flex-wrap gap-x-2 font-[var(--font-geist-mono)] text-[10px] text-[rgba(204,232,225,0.4)] mt-0.5">
             <span>{formatDate(item.date)}</span>
             {item.specialty && <span>• {item.specialty}</span>}
             {item.doctor && <span className="truncate">• {item.doctor}</span>}
@@ -179,15 +179,15 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
 
           {/* Highlights */}
           {item.highlights.length > 0 && (
-            <div className="mt-1 text-xs">
+            <div className="mt-1 text-xs search-highlight">
               {item.highlights.slice(0, 2).map((h, i) => (
-                <div key={i} className="text-gray-600 truncate">
+                <div key={i} className="text-[rgba(204,232,225,0.4)] truncate">
                   <span className={`font-medium ${
-                    h.field.startsWith('Возможно') ? 'text-orange-600' : 'text-green-700'
+                    h.field.startsWith('Возможно') ? 'text-[rgba(204,232,225,0.4)]' : 'text-[#00d2aa]'
                   }`}>
                     {h.field}:
                   </span>{' '}
-                  <span className="text-gray-500">{h.text}</span>
+                  <span className="text-[rgba(204,232,225,0.4)]">{h.text}</span>
                 </div>
               ))}
             </div>
@@ -196,7 +196,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
 
         {/* Match type label for mobile */}
         {item.matchType === 'context' && (
-          <span className="text-xs px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded flex-shrink-0">
+          <span className="text-xs px-1.5 py-0.5 bg-[rgba(204,232,225,0.08)] text-[rgba(204,232,225,0.5)] rounded flex-shrink-0">
             возможно
           </span>
         )}
@@ -214,7 +214,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
 
     return (
       <div>
-        <div className={`px-3 py-2 text-xs font-medium ${color} bg-gray-50 sticky top-0`}>
+        <div className={`px-3 py-2 text-xs font-medium ${color} bg-[#060f1c] border-b border-[rgba(0,210,170,0.08)] sticky top-0`}>
           <div className="flex items-center gap-1.5">
             {icon}
             {title} ({items.length})
@@ -229,7 +229,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
     <div ref={containerRef} className="relative w-full">
       {/* Search Input */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(204,232,225,0.4)]" />
         <Input
           ref={inputRef}
           type="text"
@@ -242,19 +242,19 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
               onSearchActive?.(true)
             }
           }}
-          className="pl-9 pr-9 h-10 text-base"
+          className="pl-9 pr-9 h-10 text-base border-[rgba(0,210,170,0.12)] bg-[#0a1525] text-[#cce8e1] placeholder:text-[rgba(204,232,225,0.3)] focus-visible:border-[rgba(0,210,170,0.4)] focus-visible:ring-[rgba(0,210,170,0.15)]"
         />
         {query && (
           <Button
             variant="ghost"
             size="sm"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 text-[rgba(204,232,225,0.4)] hover:text-[rgba(204,232,225,0.8)]"
             onClick={clearSearch}
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <X className="h-4 w-4 text-gray-400" />
+              <X className="h-4 w-4" />
             )}
           </Button>
         )}
@@ -262,10 +262,10 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
 
       {/* Results Dropdown */}
       {isOpen && results && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 max-h-[70vh] overflow-y-auto z-50">
+        <div className="absolute top-full mt-1 w-full rounded-xl border border-[rgba(0,210,170,0.15)] bg-[#060f1c] shadow-2xl z-50 overflow-hidden max-h-[70vh] overflow-y-auto">
           {results.total === 0 ? (
-            <div className="p-4 text-center text-gray-500">
-              <Search className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+            <div className="px-4 py-8 text-center text-sm text-[rgba(204,232,225,0.4)]">
+              <Search className="h-8 w-8 mx-auto mb-2 text-[rgba(204,232,225,0.2)]" />
               <p>Ничего не найдено</p>
               <p className="text-xs mt-1">Попробуйте другой запрос</p>
             </div>
@@ -276,7 +276,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
                 'Точные совпадения',
                 results.exact,
                 <CheckCircle className="h-3.5 w-3.5" />,
-                'text-green-700'
+                'text-[#00d2aa]'
               )}
 
               {/* Partial matches */}
@@ -284,7 +284,7 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
                 'Совпадения в тексте',
                 results.partial,
                 <FileText className="h-3.5 w-3.5" />,
-                'text-blue-700'
+                'text-[rgba(0,210,170,0.6)]'
               )}
 
               {/* Context matches */}
@@ -292,18 +292,18 @@ export function SearchBar({ onSearchActive }: SearchBarProps) {
                 'Возможно релевантно',
                 results.context,
                 <HelpCircle className="h-3.5 w-3.5" />,
-                'text-orange-600'
+                'text-[rgba(204,232,225,0.5)]'
               )}
 
               {/* Summary + Download button */}
-              <div className="px-3 py-2 bg-gray-50 border-t flex items-center justify-between gap-2">
-                <span className="text-xs text-gray-500">
+              <div className="px-3 py-2 bg-[#060f1c] border-t border-[rgba(0,210,170,0.08)] flex items-center justify-between gap-2">
+                <span className="text-xs text-[rgba(204,232,225,0.4)]">
                   Найдено: {results.total} документ(ов)
                 </span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 text-xs"
+                  className="h-7 text-xs border-[rgba(0,210,170,0.2)] text-[rgba(204,232,225,0.6)] hover:border-[rgba(0,210,170,0.4)] hover:text-[rgba(204,232,225,0.9)] bg-transparent"
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()

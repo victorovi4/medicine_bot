@@ -88,12 +88,12 @@ export default async function HomePage() {
   timelineItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   return (
-    <main className="container mx-auto px-4 py-8 max-w-4xl">
+    <main className="container mx-auto px-4 py-8 max-w-4xl bg-transparent">
       <PatientHeader />
 
       {/* Заголовок и кнопки — адаптивно для мобильных */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
-        <h2 className="text-xl font-semibold">История болезни</h2>
+        <h2 className="text-xl font-semibold text-[#cce8e1]">История болезни</h2>
         <div className="flex flex-wrap gap-2">
           <Link href="/metrics">
             <Button variant="outline" size="sm" className="text-xs sm:text-sm">
@@ -107,11 +107,9 @@ export default async function HomePage() {
               <span className="hidden sm:inline">Выписка 027/у</span>
             </Button>
           </Link>
-          <Link href="/add">
-            <Button size="sm" className="text-xs sm:text-sm">
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">Добавить</span>
-            </Button>
+          <Link href="/add" className="inline-flex items-center gap-2 rounded-lg bg-[#00d2aa] px-4 py-2 text-sm font-semibold text-[#030b14] hover:bg-[#00f0c6] transition-colors">
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Добавить</span>
           </Link>
         </div>
       </div>

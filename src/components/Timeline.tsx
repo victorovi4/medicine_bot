@@ -35,9 +35,9 @@ export function Timeline({ documents }: TimelineProps) {
   
   if (documents.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        <p className="text-lg">Документов пока нет</p>
-        <p className="text-sm mt-2">Добавьте первый документ, нажав кнопку выше</p>
+      <div className="text-center py-12 text-[rgba(204,232,225,0.4)]">
+        <p className="text-base">Документов пока нет</p>
+        <p className="text-sm mt-2 text-[rgba(204,232,225,0.3)]">Добавьте первый документ через кнопку выше</p>
       </div>
     )
   }
@@ -48,7 +48,7 @@ export function Timeline({ documents }: TimelineProps) {
         const { label, documents: monthDocs } = groupedByMonth[monthKey]
         return (
           <div key={monthKey}>
-            <h2 className="text-lg font-semibold text-gray-700 mb-4 capitalize">
+            <h2 className="section-label mb-4 capitalize">
               {label}
             </h2>
             <div className="space-y-4">

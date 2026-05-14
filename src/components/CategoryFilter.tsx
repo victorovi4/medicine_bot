@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { DocumentCard } from '@/components/DocumentCard'
 import { DiaryCard } from '@/components/DiaryCard'
 import { SearchBar } from '@/components/SearchBar'
@@ -67,40 +66,42 @@ export function CategoryFilter({ items }: CategoryFilterProps) {
 
       {/* Фильтры — скрыты когда поиск активен */}
       <div className={`flex flex-wrap gap-2 mb-6 ${isSearchActive ? 'opacity-30 pointer-events-none' : ''}`}>
-        <Button
-          variant={activeCategory === 'all' ? 'default' : 'outline'}
-          size="sm"
+        <button
           onClick={() => setActiveCategory('all')}
+          className={activeCategory === 'all'
+            ? 'rounded-full border border-[rgba(0,210,170,0.3)] bg-[rgba(0,210,170,0.1)] px-3 py-1 text-xs text-[#00d2aa] cursor-pointer'
+            : 'rounded-full border border-[rgba(0,210,170,0.09)] bg-[#0a1525] px-3 py-1 text-xs text-[rgba(204,232,225,0.5)] transition-all hover:border-[rgba(0,210,170,0.25)] hover:text-[rgba(204,232,225,0.8)] cursor-pointer'}
         >
           Все ({items.length})
-        </Button>
+        </button>
         {DOCUMENT_CATEGORIES.map((cat) => (
-          <Button
+          <button
             key={cat.value}
-            variant={activeCategory === cat.value ? 'default' : 'outline'}
-            size="sm"
             onClick={() => setActiveCategory(cat.value)}
             disabled={!counts[cat.value]}
-            className={!counts[cat.value] ? 'opacity-50' : ''}
+            className={activeCategory === cat.value
+              ? 'rounded-full border border-[rgba(0,210,170,0.3)] bg-[rgba(0,210,170,0.1)] px-3 py-1 text-xs text-[#00d2aa] cursor-pointer'
+              : `rounded-full border border-[rgba(0,210,170,0.09)] bg-[#0a1525] px-3 py-1 text-xs text-[rgba(204,232,225,0.5)] transition-all hover:border-[rgba(0,210,170,0.25)] hover:text-[rgba(204,232,225,0.8)] cursor-pointer${!counts[cat.value] ? ' opacity-50' : ''}`}
           >
             {cat.label} {counts[cat.value] ? `(${counts[cat.value]})` : ''}
-          </Button>
+          </button>
         ))}
         {diaryCount > 0 && (
-          <Button
-            variant={activeCategory === 'diary' ? 'default' : 'outline'}
-            size="sm"
+          <button
             onClick={() => setActiveCategory('diary')}
+            className={activeCategory === 'diary'
+              ? 'rounded-full border border-[rgba(0,210,170,0.3)] bg-[rgba(0,210,170,0.1)] px-3 py-1 text-xs text-[#00d2aa] cursor-pointer'
+              : 'rounded-full border border-[rgba(0,210,170,0.09)] bg-[#0a1525] px-3 py-1 text-xs text-[rgba(204,232,225,0.5)] transition-all hover:border-[rgba(0,210,170,0.25)] hover:text-[rgba(204,232,225,0.8)] cursor-pointer'}
           >
             Дневник ({diaryCount})
-          </Button>
+          </button>
         )}
       </div>
 
       {/* Список элементов — скрыт когда поиск активен */}
       <div className={isSearchActive ? 'opacity-30 pointer-events-none' : ''}>
         {filteredItems.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-[rgba(204,232,225,0.4)]">
             <p>Записей в этой категории пока нет</p>
           </div>
         ) : (
