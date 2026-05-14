@@ -1,9 +1,9 @@
 /**
  * OCR Engines через OpenRouter — A/B тестирование разных моделей для Pass 1.
  *
- * Все engine'ы делают одно: получают PDF → возвращают структурированный JSON
- * (ExtractedDocument) с таблицами и текстовыми блоками. Отличаются модели
- * и способ обработки PDF (native vs file-parser plugin).
+ * Все engine'ы делают одно: получают PDF или изображение → возвращают
+ * структурированный JSON (ExtractedDocument) с таблицами и текстовыми блоками.
+ * Отличаются модели и способ обработки (native PDF vs file-parser plugin vs image input).
  */
 
 import { ExtractedDocument } from '@/lib/claude-two-pass'
@@ -39,14 +39,22 @@ interface OpenRouterResponse {
   error?: { message: string; code?: string }
 }
 
+type SupportedMime = 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp'
+
+function isImageMime(mime: string): mime is 'image/jpeg' | 'image/png' | 'image/webp' {
+  return mime === 'image/jpeg' || mime === 'image/png' || mime === 'image/webp'
+}
+
 /**
- * Универсальный вызов OpenRouter с PDF.
- * Если плагин `file-parser` указан и модель не поддерживает PDF нативно,
- * OpenRouter сам распарсит PDF указанным engine и отдаст result модели.
+ * Универсальный вызов OpenRouter с PDF или изображением.
+ * Для PDF: если указан `parserEngine` (mistral-ocr / cloudflare-ai), OpenRouter сам распарсит
+ *   PDF указанным engine и отдаст результат модели. `native` означает прямой PDF-input в модель.
+ * Для изображений: используется image_url content type, parserEngine игнорируется.
  */
 async function callOpenRouter(opts: {
   model: string
-  pdfBase64: string
+  fileBase64: string
+  mimeType: SupportedMime
   prompt: string
   maxTokens?: number
   parserEngine?: 'mistral-ocr' | 'cloudflare-ai' | 'native'
@@ -55,26 +63,29 @@ async function callOpenRouter(opts: {
   const apiKey = process.env.OPENROUTER_API_KEY
   if (!apiKey) throw new Error('OPENROUTER_API_KEY is not configured')
 
+  const isImage = isImageMime(opts.mimeType)
+  const dataUrl = `data:${opts.mimeType};base64,${opts.fileBase64}`
+
+  const userContent: unknown[] = isImage
+    ? [
+        { type: 'image_url', image_url: { url: dataUrl } },
+        { type: 'text', text: opts.prompt },
+      ]
+    : [
+        {
+          type: 'file',
+          file: { filename: 'document.pdf', file_data: dataUrl },
+        },
+        { type: 'text', text: opts.prompt },
+      ]
+
   const body: Record<string, unknown> = {
     model: opts.model,
     max_tokens: opts.maxTokens ?? 8000,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'file',
-            file: {
-              filename: 'document.pdf',
-              file_data: `data:application/pdf;base64,${opts.pdfBase64}`,
-            },
-          },
-          { type: 'text', text: opts.prompt },
-        ],
-      },
-    ],
+    messages: [{ role: 'user', content: userContent }],
   }
-  if (opts.parserEngine) {
+  // file-parser plugin поддерживает только PDF
+  if (!isImage && opts.parserEngine && opts.parserEngine !== 'native') {
     body.plugins = [{ id: 'file-parser', pdf: { engine: opts.parserEngine } }]
   }
 
@@ -163,9 +174,14 @@ export interface OcrResult {
   error?: string
 }
 
-export async function runOcrEngine(engine: OcrEngine, pdfBuffer: Buffer): Promise<OcrResult> {
-  const pdfBase64 = pdfBuffer.toString('base64')
+export async function runOcrEngine(
+  engine: OcrEngine,
+  fileBuffer: Buffer,
+  mimeType: SupportedMime = 'application/pdf'
+): Promise<OcrResult> {
+  const fileBase64 = fileBuffer.toString('base64')
   const t0 = Date.now()
+  const isImage = isImageMime(mimeType)
 
   const cfg: Record<OcrEngine, { model: string; parserEngine?: 'mistral-ocr' | 'cloudflare-ai' | 'native'; maxTokens?: number }> = {
     'mistral-ocr-pipeline': { model: 'anthropic/claude-haiku-4.5', parserEngine: 'mistral-ocr' },
@@ -178,10 +194,24 @@ export async function runOcrEngine(engine: OcrEngine, pdfBuffer: Buffer): Promis
   }
   const { model, parserEngine, maxTokens } = cfg[engine]
 
+  // file-parser plugin работает только с PDF. Для изображения движки на parser
+  // (mistral-ocr-pipeline, qwen-vl-via-parser, sonnet-via-parser) недоступны.
+  if (isImage && parserEngine === 'mistral-ocr') {
+    return {
+      engine,
+      model,
+      extracted: null,
+      rawResponse: '',
+      durationMs: 0,
+      error: `Engine ${engine} requires PDF, got ${mimeType}`,
+    }
+  }
+
   try {
     const { text, raw } = await callOpenRouter({
       model,
-      pdfBase64,
+      fileBase64,
+      mimeType,
       prompt: STRUCTURED_OCR_PROMPT,
       parserEngine,
       maxTokens: maxTokens ?? 8000,

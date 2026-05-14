@@ -65,7 +65,11 @@ export async function POST(
         if (!fileRes.ok) throw new Error(`Failed to fetch source: ${fileRes.status}`)
         const buffer = Buffer.from(await fileRes.arrayBuffer())
 
-        const result = await runOcrEngine(engine, buffer)
+        const mime = (document.fileType || 'application/pdf') as 'application/pdf' | 'image/jpeg' | 'image/png' | 'image/webp'
+        if (mime !== 'application/pdf' && mime !== 'image/jpeg' && mime !== 'image/png' && mime !== 'image/webp') {
+          throw new Error(`Unsupported MIME for OCR test: ${mime}`)
+        }
+        const result = await runOcrEngine(engine, buffer, mime)
 
         const report = {
           docId: id,

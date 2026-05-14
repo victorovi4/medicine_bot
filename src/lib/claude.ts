@@ -292,17 +292,33 @@ ${ANALYSIS_PROMPT}`
 }
 
 /**
- * Анализирует изображение через Anthropic (Claude Vision).
+ * Анализирует изображение.
+ * Primary path: OpenRouter Gemini Flash + детерминированная нормализация (two-pass).
+ * Fallback: прямой Anthropic Claude Vision (Haiku) для одиночного промпт-запроса.
  */
 async function analyzeImage(
   imageUrl: string,
   mediaType: string
 ): Promise<AnalysisResult> {
-  // Скачиваем изображение и конвертируем в base64
+  // Скачиваем изображение
   const response = await fetch(imageUrl)
   const arrayBuffer = await response.arrayBuffer()
-  const base64 = Buffer.from(arrayBuffer).toString('base64')
+  const buffer = Buffer.from(arrayBuffer)
 
+  // Two-pass через OpenRouter (если ключ есть и MIME поддерживается)
+  if (
+    process.env.OPENROUTER_API_KEY &&
+    (mediaType === 'image/jpeg' || mediaType === 'image/png' || mediaType === 'image/webp')
+  ) {
+    try {
+      const { analyzePdfTwoPass } = await import('@/lib/claude-two-pass')
+      return await analyzePdfTwoPass(buffer, mediaType)
+    } catch (err) {
+      console.log('[image:two-pass] failed, falling back to direct Haiku vision:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  const base64 = buffer.toString('base64')
   const apiResponse = await getClient().messages.create({
     model: ANALYSIS_MODEL,
     max_tokens: 8000,
