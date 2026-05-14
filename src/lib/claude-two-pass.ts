@@ -325,21 +325,34 @@ const METRIC_NAME_MAP: Record<string, string> = {
   'crp': 'С-реактивный белок',
   'билирубин': 'Билирубин общий',
   'общий билирубин': 'Билирубин общий',
-  'псa': 'ПСА общий',
+  'пса': 'ПСА общий',
   'pca': 'ПСА общий',
   'pca общий': 'ПСА общий',
+  'пса общий': 'ПСА общий',
   'pca свободный': 'ПСА свободный',
+  'пса свободный': 'ПСА свободный',
+  // Короткие сокращения врачей в табличных консультативных заключениях.
+  // Только safe (>= 3 буквы, без false-positive на чужие показатели).
+  'гем': 'Гемоглобин',
+  'эргит': 'Эритроциты',
+  'лей': 'Лейкоциты',
+  'лейк': 'Лейкоциты',
+  'тромб': 'Тромбоциты',
 }
 
 function canonicalizeMetricName(rowName: string | undefined | null): string | null {
   if (!rowName) return null
   // Убираем содержимое скобок и аббревиатуры
   const cleaned = rowName.replace(/[()[\]{}]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+  if (cleaned.length < 2) return null
   // Сначала точное совпадение
   if (METRIC_NAME_MAP[cleaned]) return METRIC_NAME_MAP[cleaned]
-  // Затем substring matching
+  // Затем bidirectional substring matching: либо ключ внутри cleaned, либо cleaned внутри ключа.
+  // Cleaned должен быть достаточно длинным (>= 3) чтобы не дать ложных совпадений
+  // (например "ал" не должен матчиться на "алт").
   for (const [key, canonical] of Object.entries(METRIC_NAME_MAP)) {
     if (cleaned.includes(key)) return canonical
+    if (cleaned.length >= 3 && key.includes(cleaned)) return canonical
   }
   return null
 }

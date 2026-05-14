@@ -21,16 +21,18 @@ LIMIT=0
 DRY_RUN=0
 SLEEP_SECONDS=30
 FROM_LOG=""
+SKIP_FROM_LOG=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --base)      BASE_URL="$2"; shift 2 ;;
-    --mime)      MIME_FILTER="$2"; shift 2 ;;
-    --limit)     LIMIT="$2"; shift 2 ;;
-    --sleep)     SLEEP_SECONDS="$2"; shift 2 ;;
-    --from-log)  FROM_LOG="$2"; shift 2 ;;
-    --dry-run)   DRY_RUN=1; shift ;;
-    -h|--help)   sed -n '2,15p' "$0"; exit 0 ;;
+    --base)            BASE_URL="$2"; shift 2 ;;
+    --mime)            MIME_FILTER="$2"; shift 2 ;;
+    --limit)           LIMIT="$2"; shift 2 ;;
+    --sleep)           SLEEP_SECONDS="$2"; shift 2 ;;
+    --from-log)        FROM_LOG="$2"; shift 2 ;;
+    --skip-from-log)   SKIP_FROM_LOG="$2"; shift 2 ;;
+    --dry-run)         DRY_RUN=1; shift ;;
+    -h|--help)         sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -56,6 +58,16 @@ else
     | select(.fileType as $t | $allowed | index($t))
     | "\(.id)\t\(.fileType)\t\(.category)\t\(.date)\t\(.title)"
   ')
+fi
+
+if [[ -n "$SKIP_FROM_LOG" ]]; then
+  if [[ ! -f "$SKIP_FROM_LOG" ]]; then
+    echo "Skip log not found: $SKIP_FROM_LOG" >&2; exit 1
+  fi
+  SKIP_IDS=$(jq -r 'select(.status == "ok") | .id' "$SKIP_FROM_LOG" | sort -u)
+  SKIP_COUNT=$(echo "$SKIP_IDS" | grep -c . || true)
+  echo "Skipping $SKIP_COUNT already-ok IDs from $SKIP_FROM_LOG"
+  IDS=$(echo "$IDS" | grep -vFf <(echo "$SKIP_IDS"))
 fi
 
 TOTAL=$(echo "$IDS" | grep -c . || true)
