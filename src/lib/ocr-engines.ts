@@ -13,16 +13,20 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
 export type OcrEngine =
   | 'mistral-ocr-pipeline'      // file-parser mistral-ocr → Claude Haiku 4.5
   | 'gemini-3-1-pro-direct'     // Gemini 3.1 Pro нативный PDF input
-  | 'gemini-3-flash-direct'     // Gemini 3 Flash Preview нативный PDF (дешёвый)
+  | 'gemini-3-flash-direct'     // Gemini 3 Flash Preview нативный PDF (текущий primary)
   | 'qwen-vl-via-parser'        // Qwen 3 VL 32B + file-parser mistral-ocr
-  | 'sonnet-via-parser'         // Claude Sonnet 4.6 + file-parser mistral-ocr (сравнение нормализатора)
+  | 'sonnet-via-parser'         // Claude Sonnet 4.6 + file-parser mistral-ocr
+  | 'sonnet-direct'             // Claude Sonnet 4.6 нативный PDF (без parser plugin)
+  | 'opus-direct'               // Claude Opus 4.7 нативный PDF — лучший на сложных таблицах
 
 export const ENGINE_DESCRIPTIONS: Record<OcrEngine, string> = {
   'mistral-ocr-pipeline': 'OpenRouter file-parser (mistral-ocr) → Claude Haiku 4.5 normalize',
   'gemini-3-1-pro-direct': 'Gemini 3.1 Pro Preview (native PDF input)',
-  'gemini-3-flash-direct': 'Gemini 3 Flash Preview (native PDF input, 10x дешевле Pro)',
+  'gemini-3-flash-direct': 'Gemini 3 Flash Preview (native PDF, текущий primary)',
   'qwen-vl-via-parser': 'Qwen 3 VL 32B Instruct + file-parser mistral-ocr',
-  'sonnet-via-parser': 'Claude Sonnet 4.6 + file-parser mistral-ocr (топовый normalize)',
+  'sonnet-via-parser': 'Claude Sonnet 4.6 + file-parser mistral-ocr',
+  'sonnet-direct': 'Claude Sonnet 4.6 (native PDF, без parser)',
+  'opus-direct': 'Claude Opus 4.7 (native PDF, топ Anthropic для table+scan)',
 }
 
 interface OpenRouterResponse {
@@ -169,6 +173,8 @@ export async function runOcrEngine(engine: OcrEngine, pdfBuffer: Buffer): Promis
     'gemini-3-flash-direct': { model: 'google/gemini-3-flash-preview', parserEngine: 'native' },
     'qwen-vl-via-parser': { model: 'qwen/qwen3-vl-32b-instruct', parserEngine: 'mistral-ocr', maxTokens: 6000 },
     'sonnet-via-parser': { model: 'anthropic/claude-sonnet-4.6', parserEngine: 'mistral-ocr' },
+    'sonnet-direct': { model: 'anthropic/claude-sonnet-4.6', parserEngine: 'native' },
+    'opus-direct': { model: 'anthropic/claude-opus-4.7', parserEngine: 'native' },
   }
   const { model, parserEngine, maxTokens } = cfg[engine]
 

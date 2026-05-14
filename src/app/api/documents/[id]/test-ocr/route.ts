@@ -13,6 +13,8 @@ const VALID_ENGINES: OcrEngine[] = [
   'gemini-3-flash-direct',
   'qwen-vl-via-parser',
   'sonnet-via-parser',
+  'sonnet-direct',
+  'opus-direct',
 ]
 
 /**
