@@ -14,7 +14,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { PATIENT, getAge } from '@/lib/patient'
-import { getClient, CHAT_MODEL, ANALYSIS_MODEL, AnalysisResult } from '@/lib/claude'
+import { CHAT_MODEL, ANALYSIS_MODEL, AnalysisResult } from '@/lib/claude'
 
 // ---------- Pass 1: структурированный OCR ----------
 
@@ -132,10 +132,18 @@ export async function extractStructuredData(pdfBuffer: Buffer): Promise<Extracte
   const pdfBase64 = pdfBuffer.toString('base64')
 
   console.log(`[two-pass] Pass 1 (Sonnet OCR): sending ${sizeMB.toFixed(1)} MB PDF`)
+  const t0 = Date.now()
 
-  const response = await getClient().messages.create({
+  // Локальный клиент без retries — на Vercel один retry убивает функцию по таймауту 60с.
+  // Лучше один заход с большим timeout, fall back наверх если упало.
+  const client = new (await import('@anthropic-ai/sdk')).default({
+    maxRetries: 0,
+    timeout: 110_000, // 110с — головой даёт время Sonnet ответить на сложный PDF
+  })
+
+  const response = await client.messages.create({
     model: CHAT_MODEL, // Sonnet — точнее различает таблицы и читает цифры
-    max_tokens: 16000,
+    max_tokens: 8000,  // достаточно для структуры, быстрее генерация
     messages: [
       {
         role: 'user',
@@ -153,6 +161,7 @@ export async function extractStructuredData(pdfBuffer: Buffer): Promise<Extracte
       },
     ],
   })
+  console.log(`[two-pass] Pass 1: Sonnet returned in ${((Date.now()-t0)/1000).toFixed(1)}s`)
 
   const text = extractTextFromResponse(response)
   const json = extractJsonObject(text)
@@ -244,15 +253,22 @@ const PASS2_PROMPT = `Ты медицинский ассистент-норма�
  */
 export async function normalizeToAnalysis(extracted: ExtractedDocument): Promise<AnalysisResult> {
   console.log(`[two-pass] Pass 2 (Haiku normalize)`)
+  const t0 = Date.now()
 
   const userMessage = `Структурированные данные документа:\n\n${JSON.stringify(extracted, null, 2)}`
 
-  const response = await getClient().messages.create({
+  const client = new (await import('@anthropic-ai/sdk')).default({
+    maxRetries: 0,
+    timeout: 90_000,
+  })
+
+  const response = await client.messages.create({
     model: ANALYSIS_MODEL,
     max_tokens: 8000,
     system: PASS2_PROMPT,
     messages: [{ role: 'user', content: userMessage }],
   })
+  console.log(`[two-pass] Pass 2: Haiku returned in ${((Date.now()-t0)/1000).toFixed(1)}s`)
 
   const text = extractTextFromResponse(response)
   const json = extractJsonObject(text)
