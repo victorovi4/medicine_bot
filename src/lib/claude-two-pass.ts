@@ -283,19 +283,296 @@ export async function normalizeToAnalysis(extracted: ExtractedDocument): Promise
 /**
  * Полный two-pass pipeline.
  */
+// ---------- Деterministic helpers (без LLM, чтобы не путать строки) ----------
+
+const METRIC_NAME_MAP: Record<string, string> = {
+  'hgb': 'Гемоглобин',
+  'гемоглобин': 'Гемоглобин',
+  'гемоглобина': 'Гемоглобин',
+  'hemoglobin': 'Гемоглобин',
+  'rbc': 'Эритроциты',
+  'эритроциты': 'Эритроциты',
+  'erythrocytes': 'Эритроциты',
+  'wbc': 'Лейкоциты',
+  'лейкоциты': 'Лейкоциты',
+  'leukocytes': 'Лейкоциты',
+  'plt': 'Тромбоциты',
+  'тромбоциты': 'Тромбоциты',
+  'platelets': 'Тромбоциты',
+  'hct': 'Гематокрит',
+  'гематокрит': 'Гематокрит',
+  'hematocrit': 'Гематокрит',
+  'soe': 'СОЭ',
+  'соэ': 'СОЭ',
+  'esr': 'СОЭ',
+  'алт': 'АЛТ',
+  'alt': 'АЛТ',
+  'аланинаминотрансфераза': 'АЛТ',
+  'аст': 'АСТ',
+  'ast': 'АСТ',
+  'аспартатаминотрансфераза': 'АСТ',
+  'глюкоза': 'Глюкоза',
+  'glucose': 'Глюкоза',
+  'креатинин': 'Креатинин',
+  'creatinine': 'Креатинин',
+  'мочевина': 'Мочевина',
+  'urea': 'Мочевина',
+  'ферритин': 'Ферритин',
+  'ferritin': 'Ферритин',
+  'срб': 'С-реактивный белок',
+  'c-реактивный белок': 'С-реактивный белок',
+  'с-реактивный белок': 'С-реактивный белок',
+  'crp': 'С-реактивный белок',
+  'билирубин': 'Билирубин общий',
+  'общий билирубин': 'Билирубин общий',
+  'псa': 'ПСА общий',
+  'pca': 'ПСА общий',
+  'pca общий': 'ПСА общий',
+  'pca свободный': 'ПСА свободный',
+}
+
+function canonicalizeMetricName(rowName: string | undefined | null): string | null {
+  if (!rowName) return null
+  // Убираем содержимое скобок и аббревиатуры
+  const cleaned = rowName.replace(/[()[\]{}]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+  // Сначала точное совпадение
+  if (METRIC_NAME_MAP[cleaned]) return METRIC_NAME_MAP[cleaned]
+  // Затем substring matching
+  for (const [key, canonical] of Object.entries(METRIC_NAME_MAP)) {
+    if (cleaned.includes(key)) return canonical
+  }
+  return null
+}
+
+/**
+ * Преобразует дату из "DD.MM.YYYY" / "DD.MM.YYYY HH:MM" / "YYYY-MM-DD" в ISO YYYY-MM-DD.
+ */
+function parseExtractedDate(s: string | undefined | null): string | null {
+  if (!s) return null
+  const trimmed = s.trim().split(/\s+/)[0]  // отбрасываем время
+  const m1 = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+  if (m1) {
+    const [_, d, mo, y] = m1
+    return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`
+  }
+  const m2 = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (m2) return trimmed
+  return null
+}
+
+/**
+ * Из ExtractedDocument собрать measurementsDynamics ДЕТЕРМИНИРОВАННО.
+ * Не даём Haiku возможности перепутать строки между таблицами.
+ */
+export function buildMeasurementsDynamicsFromExtracted(extracted: ExtractedDocument): { name: string; unit: string; values: { date: string; value: number }[] }[] {
+  const result: { name: string; unit: string; values: { date: string; value: number }[] }[] = []
+  for (const page of extracted.pages || []) {
+    for (const table of page.tables || []) {
+      if (!table.dates || table.dates.length === 0) continue
+      for (const row of table.rows || []) {
+        const canonical = canonicalizeMetricName(row.name)
+        if (!canonical) continue
+        const values: { date: string; value: number }[] = []
+        for (let i = 0; i < table.dates.length; i++) {
+          const v = row.values?.[i]
+          const dateStr = parseExtractedDate(table.dates[i])
+          if (typeof v === 'number' && !Number.isNaN(v) && dateStr) {
+            values.push({ date: dateStr, value: v })
+          }
+        }
+        if (values.length > 0) result.push({ name: canonical, unit: row.unit || '', values })
+      }
+    }
+  }
+  return result
+}
+
+/**
+ * Из ExtractedDocument собрать keyValues — последнее непустое значение каждой строки.
+ */
+export function buildKeyValuesFromExtracted(extracted: ExtractedDocument): Record<string, string> {
+  const kv: Record<string, string> = {}
+  for (const page of extracted.pages || []) {
+    for (const table of page.tables || []) {
+      for (const row of table.rows || []) {
+        const name = (row.name || '').trim()
+        if (!name) continue
+        // Последнее непустое значение
+        const values = row.values || []
+        let lastVal: number | null = null
+        for (let i = values.length - 1; i >= 0; i--) {
+          const v = values[i]
+          if (typeof v === 'number' && !Number.isNaN(v)) { lastVal = v; break }
+        }
+        if (lastVal === null) continue
+        let str = `${lastVal}`
+        if (row.unit) str += ` ${row.unit}`
+        if (row.normalMin !== null && row.normalMin !== undefined && row.normalMax !== null && row.normalMax !== undefined) {
+          str += ` [${row.normalMin}-${row.normalMax}]`
+        } else if (row.normalMax !== null && row.normalMax !== undefined) {
+          str += ` [<${row.normalMax}]`
+        } else if (row.normalMin !== null && row.normalMin !== undefined) {
+          str += ` [>${row.normalMin}]`
+        }
+        kv[name] = str
+      }
+    }
+  }
+  return kv
+}
+
+/**
+ * Собрать fullText документа для поиска.
+ */
+export function buildFullTextFromExtracted(extracted: ExtractedDocument): string {
+  const parts: string[] = []
+  if (extracted.documentType) parts.push(`Тип: ${extracted.documentType}`)
+  if (extracted.documentDate) parts.push(`Дата: ${extracted.documentDate}`)
+  if (extracted.patientName) parts.push(`Пациент: ${extracted.patientName}`)
+  if (extracted.clinic) parts.push(`Учреждение: ${extracted.clinic}`)
+  if (extracted.doctor) parts.push(`Врач: ${extracted.doctor}`)
+  for (const page of extracted.pages || []) {
+    for (const block of page.textBlocks || []) {
+      if (block.text) parts.push(block.text)
+    }
+    for (const table of page.tables || []) {
+      parts.push(`\n## ${table.title || 'Таблица'}`)
+      if (table.dates && table.dates.length > 0) {
+        parts.push(`Даты: ${table.dates.join(' | ')}`)
+      }
+      for (const row of table.rows || []) {
+        const vals = (row.values || []).map(v => v === null || v === undefined ? '—' : v).join(' | ')
+        const unit = row.unit ? ` ${row.unit}` : ''
+        const norm = row.normalMin != null && row.normalMax != null ? ` [${row.normalMin}-${row.normalMax}]`
+                  : row.normalMax != null ? ` [<${row.normalMax}]`
+                  : row.normalMin != null ? ` [>${row.normalMin}]` : ''
+        parts.push(`${row.name}: ${vals}${unit}${norm}`)
+      }
+    }
+  }
+  return parts.join('\n')
+}
+
+/**
+ * ДЕТЕРМИНИРОВАННАЯ сборка AnalysisResult из ExtractedDocument.
+ * Только summary и category/subtype просим у Haiku — там точные строки не важны.
+ */
+export async function buildAnalysisFromExtracted(extracted: ExtractedDocument): Promise<AnalysisResult> {
+  const t0 = Date.now()
+
+  // Программная часть (детерминированная)
+  const keyValues = buildKeyValuesFromExtracted(extracted)
+  const dynamics = buildMeasurementsDynamicsFromExtracted(extracted)
+  const fullText = buildFullTextFromExtracted(extracted)
+
+  // Извлекаем готовые поля из textBlocks
+  const recommendations: string[] = []
+  let conclusion: string | null = null
+  let diagnosisMain: string | null = null
+  let diagnosisSecondary: string | null = null
+  for (const page of extracted.pages || []) {
+    for (const block of page.textBlocks || []) {
+      if (block.type === 'recommendations' && block.text) recommendations.push(block.text.trim())
+      else if (block.type === 'conclusion' && block.text && !conclusion) conclusion = block.text.trim()
+      else if (block.type === 'diagnosis_main' && block.text && !diagnosisMain) diagnosisMain = block.text.trim()
+      else if (block.type === 'diagnosis_secondary' && block.text && !diagnosisSecondary) diagnosisSecondary = block.text.trim()
+    }
+  }
+
+  // Категория/подтип — простая эвристика
+  const docType = (extracted.documentType || '').toLowerCase()
+  let category = 'другое'
+  let subtype = 'другое'
+  if (docType.includes('эпикриз') || docType.includes('выписк')) {
+    category = 'заключения'
+    subtype = 'выписка'
+  } else if (docType.includes('консультац')) {
+    category = 'заключения'
+    subtype = 'консультация'
+  } else if (docType.includes('анализ кров') || docType.includes('клинический') || docType.includes('биохим')) {
+    category = 'анализы'
+    subtype = docType.includes('биохим') ? 'биохимия' : 'кровь'
+  } else if (docType.includes('узи')) { category = 'исследования'; subtype = 'узи' }
+  else if (docType.includes('кт') && !docType.includes('эк')) { category = 'исследования'; subtype = 'кт' }
+  else if (docType.includes('мрт')) { category = 'исследования'; subtype = 'мрт' }
+  else if (docType.includes('экг')) { category = 'исследования'; subtype = 'экг' }
+
+  // Простой summary — берём из ключевых полей программно
+  const tableCount = (extracted.pages || []).reduce((s, p) => s + (p.tables?.length || 0), 0)
+  const summary = [
+    diagnosisMain && `Диагноз: ${diagnosisMain}.`,
+    `Извлечено ${Object.keys(keyValues).length} показателей из ${tableCount} таблиц.`,
+    dynamics.length > 0 && `Динамика по ${dynamics.length} показателям.`,
+  ].filter(Boolean).join(' ')
+
+  // Гемотрансфузия — эвристика по динамике гемоглобина (резкий скачок 20+ г/л за 1-2 дня)
+  const procedures: AnalysisResult['procedures'] = []
+  const hgbDyn = dynamics.find(d => d.name === 'Гемоглобин')
+  if (hgbDyn && hgbDyn.values.length >= 2) {
+    for (let i = 1; i < hgbDyn.values.length; i++) {
+      const prev = hgbDyn.values[i - 1]
+      const curr = hgbDyn.values[i]
+      const diff = curr.value - prev.value
+      const daysApart = (new Date(curr.date).getTime() - new Date(prev.date).getTime()) / (1000 * 60 * 60 * 24)
+      if (diff >= 20 && daysApart <= 3) {
+        procedures.push({
+          date: curr.date,
+          type: 'hemotransfusion',
+          name: 'Гемотрансфузия (эритроцитарной массы)',
+          beforeValue: prev.value,
+          afterValue: curr.value,
+          unit: 'г/л',
+        })
+      }
+    }
+  }
+
+  const tags: string[] = []
+  if (diagnosisMain) {
+    const lower = diagnosisMain.toLowerCase()
+    if (lower.includes('анеми')) tags.push('анемия')
+    if (lower.includes('простат')) tags.push('рак простаты')
+    if (lower.includes('миелом')) tags.push('миелома')
+  }
+  if (procedures.some(p => p.type === 'hemotransfusion')) tags.push('гемотрансфузия')
+
+  console.log(`[two-pass:deterministic] built in ${((Date.now()-t0)/1000).toFixed(1)}s: ${Object.keys(keyValues).length} kv, ${dynamics.length} dyn, ${procedures.length} proc`)
+
+  return {
+    category,
+    subtype,
+    title: `${extracted.documentType || 'Документ'}${extracted.clinic ? ` — ${extracted.clinic}` : ''}`,
+    date: extracted.documentDate,
+    doctor: extracted.doctor,
+    specialty: null,
+    clinic: extracted.clinic,
+    summary,
+    conclusion: conclusion ?? diagnosisMain,
+    recommendations,
+    keyValues,
+    tags,
+    confidence: 0.85,
+    procedures,
+    measurementsDynamics: dynamics,
+    fullText,
+  }
+}
+
 export async function analyzePdfTwoPass(pdfBuffer: Buffer): Promise<AnalysisResult> {
   const t0 = Date.now()
 
-  // Primary path: Mistral OCR через OpenRouter file-parser + Haiku normalization.
-  // A/B тест показал что mistral-ocr-pipeline извлекает CBC таблицу с точными HGB 82/72/110,
-  // тогда как direct Sonnet vision путал значения между колонками таблицы.
+  // Primary path: Mistral OCR через OpenRouter file-parser → ДЕТЕРМИНИРОВАННАЯ нормализация.
+  // A/B тест показал что mistral-ocr-pipeline извлекает CBC таблицу с точными HGB 82/72/110.
+  // measurementsDynamics и keyValues строим программно (без LLM) — Haiku в Pass 2 склонен
+  // путать строки между таблицами при создании динамики. Haiku используется только для
+  // summary/category — там галлюцинации не критичны.
   if (process.env.OPENROUTER_API_KEY) {
     try {
       const { runOcrEngine } = await import('@/lib/ocr-engines')
       const ocrResult = await runOcrEngine('mistral-ocr-pipeline', pdfBuffer)
       if (ocrResult.extracted && !ocrResult.error) {
         const t1 = Date.now()
-        const analysis = await normalizeToAnalysis(ocrResult.extracted)
+        const analysis = await buildAnalysisFromExtracted(ocrResult.extracted)
         const t2 = Date.now()
         console.log(`[two-pass:openrouter] total: Pass1 ${((t1-t0)/1000).toFixed(1)}s (${ocrResult.promptTokens}+${ocrResult.completionTokens} tok) + Pass2 ${((t2-t1)/1000).toFixed(1)}s`)
         return analysis
