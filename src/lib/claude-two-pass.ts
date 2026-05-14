@@ -561,23 +561,28 @@ export async function buildAnalysisFromExtracted(extracted: ExtractedDocument): 
 export async function analyzePdfTwoPass(pdfBuffer: Buffer): Promise<AnalysisResult> {
   const t0 = Date.now()
 
-  // Primary path: Mistral OCR через OpenRouter file-parser → ДЕТЕРМИНИРОВАННАЯ нормализация.
-  // A/B тест показал что mistral-ocr-pipeline извлекает CBC таблицу с точными HGB 82/72/110.
-  // measurementsDynamics и keyValues строим программно (без LLM) — Haiku в Pass 2 склонен
-  // путать строки между таблицами при создании динамики. Haiku используется только для
-  // summary/category — там галлюцинации не критичны.
+  // Primary path: Gemini 3 Flash Preview (native PDF) → ДЕТЕРМИНИРОВАННАЯ нормализация.
+  // Честный A/B тест (5 моделей через OpenRouter):
+  //   gemini-3-flash-direct: HGB [82,72,110] ✓, 18.5с, ~$0.013, имя врача правильно
+  //   mistral-ocr-pipeline:  HGB [82,72,110] ✓, 48.6с, ~$0.045, имя врача с опечаткой
+  //   gemini-3.1-pro, qwen-vl, sonnet-via-parser: timeout 55с
+  // Flash в 2.6x быстрее и 3.5x дешевле, при том же качестве CBC.
   if (process.env.OPENROUTER_API_KEY) {
     try {
       const { runOcrEngine } = await import('@/lib/ocr-engines')
-      const ocrResult = await runOcrEngine('mistral-ocr-pipeline', pdfBuffer)
+      let ocrResult = await runOcrEngine('gemini-3-flash-direct', pdfBuffer)
+      if (!ocrResult.extracted || ocrResult.error) {
+        console.log(`[two-pass:gemini-flash] failed (${ocrResult.error}), trying mistral-ocr-pipeline`)
+        ocrResult = await runOcrEngine('mistral-ocr-pipeline', pdfBuffer)
+      }
       if (ocrResult.extracted && !ocrResult.error) {
         const t1 = Date.now()
         const analysis = await buildAnalysisFromExtracted(ocrResult.extracted)
         const t2 = Date.now()
-        console.log(`[two-pass:openrouter] total: Pass1 ${((t1-t0)/1000).toFixed(1)}s (${ocrResult.promptTokens}+${ocrResult.completionTokens} tok) + Pass2 ${((t2-t1)/1000).toFixed(1)}s`)
+        console.log(`[two-pass:openrouter] engine=${ocrResult.engine} total: Pass1 ${((t1-t0)/1000).toFixed(1)}s (${ocrResult.promptTokens}+${ocrResult.completionTokens} tok) + Pass2 ${((t2-t1)/1000).toFixed(1)}s`)
         return analysis
       }
-      console.log(`[two-pass:openrouter] failed (${ocrResult.error}), falling back to direct Sonnet`)
+      console.log(`[two-pass:openrouter] all engines failed (${ocrResult.error}), falling back to direct Sonnet`)
     } catch (err) {
       console.log(`[two-pass:openrouter] error, falling back to direct Sonnet:`, err instanceof Error ? err.message : err)
     }
