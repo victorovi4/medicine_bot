@@ -290,6 +290,13 @@ export async function analyzePdfTwoPass(pdfBuffer: Buffer): Promise<AnalysisResu
   const analysis = await normalizeToAnalysis(extracted)
   const t2 = Date.now()
   console.log(`[two-pass] total: Pass1 ${((t1-t0)/1000).toFixed(1)}s + Pass2 ${((t2-t1)/1000).toFixed(1)}s`)
+
+  // DEBUG: положим Pass 1 результат в fullText чтобы можно было увидеть
+  // что именно Haiku извлёк (раздел Tables разворачивается в начале).
+  // Это временно для диагностики, потом fullText заменится обратно на нормальный.
+  const debugPrefix = `\n\n--- DEBUG: Pass 1 extracted ---\n${JSON.stringify(extracted, null, 2)}\n--- END DEBUG ---\n\n`
+  analysis.fullText = debugPrefix + (analysis.fullText || '')
+
   return analysis
 }
 

@@ -101,6 +101,9 @@ async function runReanalyze(
   if (analysis.measurementsDynamics && analysis.measurementsDynamics.length > 0) {
     for (const metric of analysis.measurementsDynamics) {
       for (const v of metric.values) {
+        // Пропускаем точки где значение не число (null/undefined/NaN) —
+        // Prisma.measurement.value Float не принимает null.
+        if (v.value === null || v.value === undefined || typeof v.value !== 'number' || Number.isNaN(v.value)) continue
         dynamicMeasurements.push({
           name: metric.name,
           value: v.value,
