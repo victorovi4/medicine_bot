@@ -554,9 +554,16 @@ async function analyzePdf(pdfUrl: string, preloadedBuffer?: Buffer): Promise<Ana
     console.log('PDF text extraction failed/timeout:', err instanceof Error ? err.message : err)
   }
 
-  // 2. Vision-подход: разбиваем PDF на страницы и отправляем как изображения
-  console.log(`Using page-by-page vision analysis for PDF (${sizeMB.toFixed(1)} MB)`)
-  return analyzePdfByPages(buffer)
+  // 2. Two-pass extraction (Sonnet OCR → Haiku normalize).
+  //    Лучше различает соседние таблицы и не путает строки между ними.
+  console.log(`Using two-pass extraction for PDF (${sizeMB.toFixed(1)} MB)`)
+  try {
+    const { analyzePdfTwoPass } = await import('@/lib/claude-two-pass')
+    return await analyzePdfTwoPass(buffer)
+  } catch (err) {
+    console.log('Two-pass failed, falling back to single-pass vision:', err instanceof Error ? err.message : err)
+    return analyzePdfByPages(buffer)
+  }
 }
 
 /**
