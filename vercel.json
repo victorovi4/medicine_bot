@@ -20,6 +20,9 @@
     },
     "src/app/api/documents/[id]/reanalyze/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/documents/[id]/test-ocr/route.ts": {
+      "maxDuration": 60
     }
   }
 }
