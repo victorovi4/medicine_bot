@@ -14,7 +14,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { PATIENT, getAge } from '@/lib/patient'
-import { ANALYSIS_MODEL, AnalysisResult } from '@/lib/claude'
+import { ANALYSIS_MODEL, CHAT_MODEL, AnalysisResult } from '@/lib/claude'
 
 // ---------- Pass 1: структурированный OCR ----------
 
@@ -131,19 +131,19 @@ export async function extractStructuredData(pdfBuffer: Buffer): Promise<Extracte
   const sizeMB = pdfBuffer.length / (1024 * 1024)
   const pdfBase64 = pdfBuffer.toString('base64')
 
-  console.log(`[two-pass] Pass 1 (Haiku OCR): sending ${sizeMB.toFixed(1)} MB PDF`)
+  console.log(`[two-pass] Pass 1 (Sonnet OCR): sending ${sizeMB.toFixed(1)} MB PDF`)
   const t0 = Date.now()
 
-  // Hobby plan Vercel жёстко режет функции через 60с независимо от vercel.json.
-  // Использую Haiku и для Pass 1 (быстрее Sonnet, дешевле), но с детальным промптом
-  // про структуру. Sonnet вернём когда перейдём на Pro plan.
+  // Sonnet — реально успевает (наблюдалось 37.8с на 1.7MB PDF). Haiku на этом
+  // же PDF не успел в 50с timeout. Pass 2 на тексте быстрый, итого вписываемся
+  // в 60с Vercel Hobby limit.
   const client = new (await import('@anthropic-ai/sdk')).default({
     maxRetries: 0,
-    timeout: 50_000,
+    timeout: 55_000,
   })
 
   const response = await client.messages.create({
-    model: ANALYSIS_MODEL, // Haiku — вписывается в 60с Vercel timeout
+    model: CHAT_MODEL, // Sonnet
     max_tokens: 6000,
     messages: [
       {
