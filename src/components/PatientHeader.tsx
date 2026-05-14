@@ -1,105 +1,84 @@
 import Link from 'next/link'
-import { PATIENT, getFullName, getAge, getFormattedBirthDate, getFormattedTreatmentStartDate } from '@/lib/patient'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { FileText, MessageSquare, Stethoscope } from 'lucide-react'
+import {
+  PATIENT,
+  getFullName,
+  getAge,
+  getFormattedBirthDate,
+  getFormattedTreatmentStartDate,
+} from '@/lib/patient'
+
+const NAV_LINKS = [
+  { href: '/', label: 'Карта' },
+  { href: '/chat', label: 'Чат' },
+  { href: '/assessment', label: 'Заключение' },
+  { href: '/metrics', label: 'Метрики' },
+  { href: '/extract', label: 'Выписка' },
+]
 
 export function PatientHeader() {
   const hasComorbidities = PATIENT.comorbidities.length > 0
-  
+
   return (
-    <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-      <CardContent className="pt-6">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          {/* Основная информация */}
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold">
-              <Link href="/" className="text-blue-900 hover:text-blue-700 hover:underline">
-                {getFullName()}
-              </Link>
-            </h1>
-            <p className="text-blue-700">
-              {getFormattedBirthDate()} ({getAge()} лет)
-            </p>
-            
-            {/* Основной диагноз */}
-            {PATIENT.mainDiagnosis && (
-              <div className="flex items-center gap-2 mt-3">
-                <span className="text-sm text-gray-600">Основной диагноз:</span>
-                <Badge variant="destructive" className="font-medium">
-                  {PATIENT.mainDiagnosis}
-                  {PATIENT.mainDiagnosisCode && (
-                    <span className="ml-1 opacity-75">({PATIENT.mainDiagnosisCode})</span>
-                  )}
-                </Badge>
-              </div>
-            )}
-            
-            {/* Сопутствующие заболевания */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm text-gray-600">Сопутствующие:</span>
-              {hasComorbidities ? (
-                PATIENT.comorbidities.map((disease) => (
-                  <Badge key={disease} variant="secondary" className="text-xs">
-                    {disease}
-                  </Badge>
-                ))
-              ) : (
-                <span className="text-sm text-gray-400 italic">Не указаны</span>
-              )}
+    <div className="mb-6 rounded-xl border border-[rgba(0,210,170,0.12)] bg-[#060f1c] p-5 border-l-2 border-l-[#00d2aa] pl-6">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        {/* Left — patient info */}
+        <div className="space-y-1.5">
+          <h1 className="text-xl font-bold text-[#cce8e1]">
+            <Link href="/" className="hover:text-[#00d2aa] transition-colors">
+              {getFullName()}
+            </Link>
+          </h1>
+
+          <p className="font-[var(--font-geist-mono)] text-xs text-[rgba(204,232,225,0.45)] tracking-wide">
+            {getFormattedBirthDate()} · {getAge()} лет · лечение с {getFormattedTreatmentStartDate()}
+          </p>
+
+          {PATIENT.mainDiagnosis && (
+            <div className="flex items-center gap-2 pt-1">
+              <span className="text-xs text-[rgba(204,232,225,0.4)]">Диагноз:</span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-[rgba(255,107,107,0.3)] bg-[rgba(255,107,107,0.1)] px-2.5 py-0.5 text-xs font-medium text-[#ff8888]">
+                {PATIENT.mainDiagnosis}
+                {PATIENT.mainDiagnosisCode && (
+                  <span className="opacity-60">({PATIENT.mainDiagnosisCode})</span>
+                )}
+              </span>
             </div>
-          </div>
-          
-          {/* Правая колонка */}
-          <div className="text-right space-y-2">
-            <p className="text-sm font-medium text-blue-800">Медицинская карта</p>
-            
-            {/* Ссылки */}
-            <div className="flex flex-col gap-1">
-              <Link
-                href="/chat"
-                className="inline-flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800 hover:underline"
-              >
-                <MessageSquare className="h-4 w-4" />
-                <span>Консультация ИИ</span>
-              </Link>
-              <Link
-                href="/extract"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
-              >
-                <FileText className="h-4 w-4" />
-                <span>Резюме (027/у)</span>
-              </Link>
-              <Link
-                href="/assessment"
-                className="inline-flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-800 hover:underline"
-              >
-                <Stethoscope className="h-4 w-4" />
-                <span>ИИ-заключение</span>
-              </Link>
+          )}
+
+          {hasComorbidities && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+              <span className="text-xs text-[rgba(204,232,225,0.4)]">Сопутствующие:</span>
+              {PATIENT.comorbidities.map((d) => (
+                <span
+                  key={d}
+                  className="rounded-full border border-[rgba(0,210,170,0.12)] bg-[#0a1525] px-2 py-0.5 text-[10px] text-[rgba(204,232,225,0.55)]"
+                >
+                  {d}
+                </span>
+              ))}
             </div>
-            
-            {/* Период лечения */}
-            <p className="text-xs text-gray-500">
-              Лечение с {getFormattedTreatmentStartDate()}
-            </p>
-            
-            {/* Отслеживаемые показатели */}
-            {PATIENT.trackingMetrics.length > 0 && (
-              <div className="text-xs text-gray-500">
-                <p className="mb-1">Отслеживаем:</p>
-                <div className="flex flex-wrap justify-end gap-1">
-                  {PATIENT.trackingMetrics.map((metric) => (
-                    <Badge key={metric} variant="outline" className="text-xs">
-                      {metric}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
-      </CardContent>
-    </Card>
+
+        {/* Right — nav links */}
+        <div className="flex flex-wrap gap-1.5 md:justify-end">
+          {NAV_LINKS.map(({ href, label }) => (
+            <Link
+              key={href}
+              href={href}
+              className="rounded-lg border border-[rgba(0,210,170,0.12)] bg-[#0a1525] px-3 py-1.5 text-xs font-medium text-[rgba(204,232,225,0.55)] transition-all hover:border-[rgba(0,210,170,0.35)] hover:bg-[rgba(0,210,170,0.08)] hover:text-[#00d2aa]"
+            >
+              {label}
+            </Link>
+          ))}
+          <Link
+            href="/add"
+            className="rounded-lg bg-[#00d2aa] px-3 py-1.5 text-xs font-semibold text-[#030b14] transition-all hover:bg-[#00f0c6]"
+          >
+            + Добавить
+          </Link>
+        </div>
+      </div>
+    </div>
   )
 }
