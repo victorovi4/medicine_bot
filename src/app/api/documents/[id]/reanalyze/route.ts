@@ -62,16 +62,30 @@ async function runReanalyze(
 ): Promise<void> {
   const prisma = getPrismaClient({ testMode })
 
-  console.log(`[reanalyze:${id}] starting`)
-  const response = await fetch(fileUrl)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch source file: ${response.status}`)
+  // Промежуточные обновления документа чтобы видеть прогресс по updatedAt
+  // (Vercel CLI logs не показывает after() background output надёжно).
+  const stage = async (label: string): Promise<void> => {
+    try {
+      await prisma.document.update({ where: { id }, data: { content: `[reanalyze stage: ${label}] ${new Date().toISOString()}` } })
+    } catch { /* ignore */ }
   }
-  const buffer = Buffer.from(await response.arrayBuffer())
 
-  console.log(`[reanalyze:${id}] file fetched (${buffer.length} bytes), calling Claude`)
-  const analysis = await analyzeDocument(fileUrl, fileType, buffer)
-  console.log(`[reanalyze:${id}] Claude returned analysis, updating DB`)
+  console.log(`[reanalyze:${id}] starting`)
+  await stage('starting')
+
+  try {
+    const response = await fetch(fileUrl)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch source file: ${response.status}`)
+    }
+    const buffer = Buffer.from(await response.arrayBuffer())
+
+    console.log(`[reanalyze:${id}] file fetched (${buffer.length} bytes), calling Claude`)
+    await stage(`file fetched (${buffer.length})`)
+
+    const analysis = await analyzeDocument(fileUrl, fileType, buffer)
+    console.log(`[reanalyze:${id}] Claude returned analysis, updating DB`)
+    await stage(`analyzeDocument done — kv=${Object.keys(analysis.keyValues || {}).length} dyn=${analysis.measurementsDynamics?.length || 0}`)
 
   const { category, subtype } = normalizeDocumentType(
     analysis.category || document.category,
@@ -154,7 +168,13 @@ async function runReanalyze(
         })
       }
     }
-  }, { timeout: 30000 })
+    }, { timeout: 30000 })
 
-  console.log(`[reanalyze:${id}] done: ${allMeasurements.length} measurements, ${analysis.procedures?.length || 0} procedures`)
+    console.log(`[reanalyze:${id}] done: ${allMeasurements.length} measurements, ${analysis.procedures?.length || 0} procedures`)
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err)
+    console.error(`[reanalyze:${id}] failed:`, msg)
+    await stage(`FAILED: ${msg.substring(0, 800)}`)
+    throw err
+  }
 }
