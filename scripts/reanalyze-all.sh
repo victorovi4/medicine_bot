@@ -22,6 +22,8 @@ DRY_RUN=0
 SLEEP_SECONDS=30
 FROM_LOG=""
 SKIP_FROM_LOG=""
+PRIORITY_SORT=0
+WIPE_FIRST=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +33,8 @@ while [[ $# -gt 0 ]]; do
     --sleep)           SLEEP_SECONDS="$2"; shift 2 ;;
     --from-log)        FROM_LOG="$2"; shift 2 ;;
     --skip-from-log)   SKIP_FROM_LOG="$2"; shift 2 ;;
+    --priority-sort)   PRIORITY_SORT=1; shift ;;
+    --wipe-first)      WIPE_FIRST=1; shift ;;
     --dry-run)         DRY_RUN=1; shift ;;
     -h|--help)         sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
@@ -51,12 +55,27 @@ if [[ -n "$FROM_LOG" ]]; then
 else
   echo "Fetching document list from ${BASE_URL}/api/documents..."
   ALL_DOCS=$(curl -fsS "${BASE_URL}/api/documents")
-  IDS=$(echo "$ALL_DOCS" | jq -r --arg mimes "$MIME_FILTER" '
+  if [[ "$PRIORITY_SORT" -eq 1 ]]; then
+    # Сортируем: сначала первичные источники measurements (анализы → выписки),
+    # потом исследования, потом консультации/другое. Внутри группы — по возрастанию даты,
+    # чтобы более ранние первичные точки попадали в БД раньше своих цитат.
+    SORTED=$(echo "$ALL_DOCS" | jq '
+      def priority:
+        if .category == "анализы" then 1
+        elif (.category == "заключения" and .subtype == "выписка") then 2
+        elif .category == "исследования" then 3
+        else 4 end;
+      sort_by([priority, .date])
+    ')
+  else
+    SORTED="$ALL_DOCS"
+  fi
+  IDS=$(echo "$SORTED" | jq -r --arg mimes "$MIME_FILTER" '
     ($mimes | split(",")) as $allowed
     | .[]
     | select(.fileUrl != null)
     | select(.fileType as $t | $allowed | index($t))
-    | "\(.id)\t\(.fileType)\t\(.category)\t\(.date)\t\(.title)"
+    | "\(.id)\t\(.fileType)\t\(.category)/\(.subtype)\t\(.date)\t\(.title)"
   ')
 fi
 
@@ -88,6 +107,12 @@ fi
 
 echo "Logging to: $LOG_FILE"
 echo "Sleep between requests: ${SLEEP_SECONDS}s"
+
+if [[ "$WIPE_FIRST" -eq 1 ]]; then
+  echo "Wiping all measurements first (POST /api/admin/wipe-measurements)..."
+  WIPE_RESULT=$(curl -fsS -X POST "${BASE_URL}/api/admin/wipe-measurements")
+  echo "  → $WIPE_RESULT"
+fi
 echo
 
 n=0
