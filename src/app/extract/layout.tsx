@@ -4,11 +4,11 @@ export const dynamic = 'force-dynamic'
 
 export default function ExtractLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
-      <div className="container mx-auto px-4 pt-8 max-w-4xl print:hidden">
+    <div className="min-h-screen bg-[#030b14]">
+      <div className="max-w-4xl mx-auto px-4 pt-4 print:hidden">
         <PatientHeader />
       </div>
       {children}
-    </>
+    </div>
   )
 }

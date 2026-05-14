@@ -152,7 +152,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center justify-between">
             <span>{metric.name}</span>
-            <span className="text-sm text-gray-500 font-normal">Нет данных</span>
+            <span className="text-sm text-[rgba(204,232,225,0.4)] font-normal">Нет данных</span>
           </CardTitle>
         </CardHeader>
       </Card>
@@ -234,7 +234,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
 
   // Цвет тренда (для ПСА рост — плохо, для гемоглобина зависит)
   const getTrendColor = () => {
-    if (metric.changeDirection === 'stable') return 'text-gray-500'
+    if (metric.changeDirection === 'stable') return 'text-[rgba(204,232,225,0.4)]'
     
     // Для ПСА: рост — плохо (красный), снижение — хорошо (зелёный)
     if (metric.name.includes('ПСА')) {
@@ -246,21 +246,21 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
       if (metric.lastStatus === 'low') return 'text-red-500'
       if (metric.lastStatus === 'high') return 'text-orange-500'
     }
-    
-    return 'text-gray-500'
+
+    return 'text-[rgba(204,232,225,0.4)]'
   }
 
   // Статус badge
   const getStatusBadge = () => {
     switch (metric.lastStatus) {
       case 'normal':
-        return <Badge className="bg-green-100 text-green-800">Норма</Badge>
+        return <Badge className="bg-[rgba(0,210,170,0.1)] text-[#00d2aa] border-[rgba(0,210,170,0.2)]">Норма</Badge>
       case 'low':
-        return <Badge className="bg-blue-100 text-blue-800">Ниже нормы</Badge>
+        return <Badge className="bg-[rgba(59,130,246,0.1)] text-[#93c5fd] border-[rgba(59,130,246,0.2)]">Ниже нормы</Badge>
       case 'high':
-        return <Badge className="bg-orange-100 text-orange-800">Выше нормы</Badge>
+        return <Badge className="bg-[rgba(245,166,35,0.1)] text-[#f5a623] border-[rgba(245,166,35,0.2)]">Выше нормы</Badge>
       case 'critical':
-        return <Badge className="bg-red-100 text-red-800">Критично</Badge>
+        return <Badge className="bg-[rgba(255,107,107,0.1)] text-[#ff6b6b] border-[rgba(255,107,107,0.2)]">Критично</Badge>
       default:
         return null
     }
@@ -303,7 +303,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
           </div>
         </CardTitle>
         {!compact && metric.firstValue !== null && metric.lastValue !== null && (
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-[rgba(204,232,225,0.4)]">
             {chartData[0]?.fullDate}: {metric.firstValue} {metric.unit} →{' '}
             {chartData[chartData.length - 1]?.fullDate}: {metric.lastValue} {metric.unit}
           </p>
@@ -315,7 +315,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
             data={chartData}
             margin={{ top: 20, right: 5, left: 0, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,210,170,0.06)" />
             
             {/* Зона нормы */}
             <ReferenceArea
@@ -328,37 +328,37 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
             {/* Линии нормы */}
             <ReferenceLine
               y={metric.normalMax}
-              stroke="#22c55e"
-              strokeDasharray="5 5"
-              label={{ value: 'Норма', position: 'right', fontSize: 10 }}
+              stroke="rgba(0,210,170,0.2)"
+              strokeDasharray="4 4"
+              label={{ value: 'Норма', position: 'right', fontSize: 10, fill: 'rgba(204,232,225,0.4)' }}
             />
             {metric.normalMin > 0 && (
               <ReferenceLine
                 y={metric.normalMin}
-                stroke="#22c55e"
-                strokeDasharray="5 5"
+                stroke="rgba(0,210,170,0.2)"
+                strokeDasharray="4 4"
               />
             )}
-            
+
             {/* Критическое значение */}
             {metric.critical && (
               <ReferenceLine
                 y={metric.critical}
-                stroke="#ef4444"
+                stroke="rgba(255,107,107,0.3)"
                 strokeDasharray="3 3"
-                label={{ value: 'Критично', position: 'right', fontSize: 10 }}
+                label={{ value: 'Критично', position: 'right', fontSize: 10, fill: 'rgba(255,107,107,0.6)' }}
               />
             )}
             
             <XAxis
               dataKey="xKey"
-              tick={{ fontSize: 10 }}
+              tick={{ fill: 'rgba(204,232,225,0.4)', fontSize: 11 }}
               tickMargin={5}
               tickFormatter={(val) => chartData[Number(val)]?.dateFormatted || val}
             />
             <YAxis
               domain={[yMin, yMax]}
-              tick={{ fontSize: 10 }}
+              tick={{ fill: 'rgba(204,232,225,0.4)', fontSize: 11 }}
               width={40}
               tickFormatter={(v) => v.toFixed(1)}
             />
@@ -367,12 +367,19 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
                 if (active && payload && payload.length) {
                   const data = payload[0].payload
                   return (
-                    <div className="bg-white border rounded shadow-lg p-2 text-sm">
-                      <p className="font-medium">{data.fullDate}</p>
-                      <p style={{ color: metric.color }}>
+                    <div style={{
+                      background: '#0a1525',
+                      border: '1px solid rgba(0,210,170,0.2)',
+                      borderRadius: '8px',
+                      color: '#cce8e1',
+                      fontSize: 12,
+                      padding: '8px',
+                    }}>
+                      <p style={{ color: 'rgba(204,232,225,0.6)', marginBottom: 4 }}>{data.fullDate}</p>
+                      <p style={{ color: '#00d2aa' }}>
                         {metric.name}: {data.value} {metric.unit}
                       </p>
-                      <p className="text-gray-500 text-xs">{data.documentTitle}</p>
+                      <p style={{ color: 'rgba(204,232,225,0.4)', fontSize: 11, marginTop: 4 }}>{data.documentTitle}</p>
                     </div>
                   )
                 }
@@ -382,10 +389,10 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
             <Line
               type="monotone"
               dataKey="value"
-              stroke={metric.color}
+              stroke="#00d2aa"
               strokeWidth={2}
-              dot={{ fill: metric.color, strokeWidth: 2, r: 4 }}
-              activeDot={{ r: 6 }}
+              dot={{ fill: '#00d2aa', strokeWidth: 0, r: 4 }}
+              activeDot={{ fill: '#00f0c6', r: 5 }}
             />
             
             {/* Маркеры событий (ручные — пунктирные) */}
@@ -424,12 +431,12 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
         {/* Легенда событий */}
         {!compact && events.length > 0 && (
           <div className="mt-3 space-y-2 print:hidden">
-            <p className="text-xs font-medium text-gray-500">События на графике:</p>
+            <p className="text-xs font-medium text-[rgba(204,232,225,0.4)]">События на графике:</p>
             <div className="flex flex-wrap gap-2">
               {events.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center gap-1 text-xs bg-gray-50 rounded-full px-2 py-1 group"
+                  className="flex items-center gap-1 text-xs bg-[#0a1525] rounded-full px-2 py-1 group text-[rgba(204,232,225,0.7)]"
                 >
                   <span
                     className="w-2 h-2 rounded-full"
@@ -437,11 +444,11 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
                   />
                   <span>{EVENT_ICONS[event.eventType] || '📌'}</span>
                   <span>{new Date(event.date).toLocaleDateString('ru-RU')}</span>
-                  <span className="text-gray-500">—</span>
+                  <span className="text-[rgba(204,232,225,0.4)]">—</span>
                   <span>{event.label}</span>
                   <button
                     onClick={() => handleDeleteEvent(event.id)}
-                    className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 ml-1"
+                    className="opacity-0 group-hover:opacity-100 text-[#ff6b6b] hover:text-[#ff8888] ml-1"
                     title="Удалить"
                   >
                     <Trash2 className="h-3 w-3" />
@@ -455,12 +462,12 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
         {/* Легенда процедур */}
         {!compact && procedureMarkers.length > 0 && (
           <div className="mt-3 space-y-2 print:hidden">
-            <p className="text-xs font-medium text-gray-500">Процедуры:</p>
+            <p className="text-xs font-medium text-[rgba(204,232,225,0.4)]">Процедуры:</p>
             <div className="flex flex-wrap gap-2">
               {procedureMarkers.map((proc, idx) => (
                 <div
                   key={`proc-legend-${idx}`}
-                  className="flex items-center gap-1 text-xs bg-gray-50 rounded-full px-2 py-1"
+                  className="flex items-center gap-1 text-xs bg-[#0a1525] rounded-full px-2 py-1 text-[rgba(204,232,225,0.7)]"
                 >
                   <span
                     className="w-2 h-2 rounded-full"
@@ -468,7 +475,7 @@ export function MetricsChart({ metric, compact = false, showEventControls = true
                   />
                   <span>{EVENT_ICONS[proc.type] || '📌'}</span>
                   <span>{new Date(proc.date).toLocaleDateString('ru-RU')}</span>
-                  <span className="text-gray-500">—</span>
+                  <span className="text-[rgba(204,232,225,0.4)]">—</span>
                   <span>{proc.name || PROCEDURE_LABELS[proc.type] || proc.type}</span>
                 </div>
               ))}
@@ -500,7 +507,7 @@ export function MetricsGrid({ metrics, compact = false }: MetricsGridProps) {
 
   if (metricsWithData.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-[rgba(204,232,225,0.4)]">
         Нет данных для отображения графиков.
         <br />
         Показатели будут извлекаться автоматически при добавлении документов.

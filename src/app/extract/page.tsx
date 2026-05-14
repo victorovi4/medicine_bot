@@ -175,8 +175,8 @@ export default function ExtractPage() {
     return (
       <main className="container mx-auto px-4 pb-8 max-w-4xl">
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-3 text-gray-600">Загрузка выписки...</span>
+          <Loader2 className="h-8 w-8 animate-spin text-[#00d2aa]" />
+          <span className="ml-3 text-[rgba(204,232,225,0.6)]">Загрузка выписки...</span>
         </div>
       </main>
     )
@@ -186,11 +186,11 @@ export default function ExtractPage() {
     <main className="container mx-auto px-4 pb-8 max-w-4xl">
       <div className="mb-6 flex items-center justify-between print:hidden">
         <div>
-          <h2 className="text-xl font-semibold">Выписка из истории болезни</h2>
-          <p className="text-gray-500 text-sm">Форма 027/у — текущий период лечения</p>
+          <h2 className="text-xl font-semibold text-[#cce8e1]">Выписка из истории болезни</h2>
+          <p className="text-[rgba(204,232,225,0.4)] text-sm">Форма 027/у — текущий период лечения</p>
         </div>
         <Link href="/">
-          <Button variant="outline">
+          <Button variant="outline" className="border-[rgba(0,210,170,0.2)] text-[rgba(204,232,225,0.7)] hover:border-[rgba(0,210,170,0.4)]">
             <ArrowLeft className="h-4 w-4 mr-2" />
             К истории
           </Button>
@@ -198,23 +198,23 @@ export default function ExtractPage() {
       </div>
       
       {error && (
-        <Card className="mb-6 border-red-200 bg-red-50 print:hidden">
+        <Card className="mb-6 border-[rgba(255,107,107,0.2)] bg-[rgba(255,107,107,0.05)] print:hidden">
           <CardContent className="pt-6">
-            <p className="text-red-600">{error}</p>
+            <p className="text-[#ff6b6b]">{error}</p>
           </CardContent>
         </Card>
       )}
       
       {/* Если выписки нет — предлагаем сгенерировать */}
       {!extract && !error && (
-        <Card className="mb-6 print:hidden">
+        <Card className="mb-6 print:hidden border-[rgba(0,210,170,0.09)] bg-[#060f1c]">
           <CardContent className="pt-6 text-center">
-            <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2">Выписка ещё не сгенерирована</h3>
-            <p className="text-gray-500 mb-4">
+            <FileText className="h-12 w-12 mx-auto text-[rgba(204,232,225,0.3)] mb-4" />
+            <h3 className="text-lg font-medium mb-2 text-[#cce8e1]">Выписка ещё не сгенерирована</h3>
+            <p className="text-[rgba(204,232,225,0.4)] mb-4">
               Нажмите кнопку, чтобы создать выписку за период лечения
             </p>
-            <Button onClick={() => generateExtract()} disabled={generating}>
+            <Button onClick={() => generateExtract()} disabled={generating} className="bg-[#00d2aa] text-[#030b14] hover:bg-[#00f0c6]">
               {generating ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -236,11 +236,11 @@ export default function ExtractPage() {
         <div className="space-y-4">
           {/* Кнопки действий */}
           <div className="flex flex-wrap gap-2 print:hidden">
-            <Button variant="outline" onClick={downloadPdf}>
+            <Button variant="outline" onClick={downloadPdf} className="border-[rgba(0,210,170,0.2)] text-[rgba(204,232,225,0.7)] hover:border-[rgba(0,210,170,0.4)]">
               <Download className="h-4 w-4 mr-2" />
               Скачать PDF
             </Button>
-            <Button variant="outline" onClick={copyToClipboard}>
+            <Button variant="outline" onClick={copyToClipboard} className="border-[rgba(0,210,170,0.2)] text-[rgba(204,232,225,0.7)] hover:border-[rgba(0,210,170,0.4)]">
               {copied ? (
                 <>
                   <Check className="h-4 w-4 mr-2" />
@@ -253,10 +253,11 @@ export default function ExtractPage() {
                 </>
               )}
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => generateExtract(true)}
               disabled={generating}
+              className="border-[rgba(0,210,170,0.2)] text-[rgba(204,232,225,0.7)] hover:border-[rgba(0,210,170,0.4)]"
             >
               {generating ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -265,10 +266,10 @@ export default function ExtractPage() {
               )}
               Обновить
             </Button>
-            
+
             {/* Информация о кэше */}
             {extract.cached && extract.generatedAt && (
-              <div className="flex items-center text-sm text-gray-500 ml-auto">
+              <div className="flex items-center text-sm text-[rgba(204,232,225,0.4)] ml-auto">
                 <Clock className="h-4 w-4 mr-1" />
                 Обновлено: {new Date(extract.generatedAt).toLocaleString('ru-RU')}
               </div>

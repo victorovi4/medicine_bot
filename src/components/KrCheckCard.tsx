@@ -38,37 +38,37 @@ const STATUS_CONFIG: Record<string, {
 }> = {
   ok: {
     icon: CheckCircle2,
-    bg: 'bg-green-950/50',
-    border: 'border-l-green-500',
-    text: 'text-green-500',
+    bg: 'bg-[rgba(0,210,170,0.1)]',
+    border: 'border-l-[#34d399]',
+    text: 'text-[#34d399]',
     label: 'соответствует',
   },
   warning: {
     icon: AlertTriangle,
-    bg: 'bg-yellow-950/50',
-    border: 'border-l-yellow-500',
-    text: 'text-yellow-500',
+    bg: 'bg-[rgba(245,166,35,0.1)]',
+    border: 'border-l-[#f5a623]',
+    text: 'text-[#f5a623]',
     label: 'внимание',
   },
   error: {
     icon: XCircle,
-    bg: 'bg-red-950/50',
-    border: 'border-l-red-500',
-    text: 'text-red-500',
+    bg: 'bg-[rgba(255,107,107,0.1)]',
+    border: 'border-l-[#ff6b6b]',
+    text: 'text-[#ff6b6b]',
     label: 'расхождений',
   },
   missing: {
     icon: XCircle,
-    bg: 'bg-red-950/50',
-    border: 'border-l-red-500',
-    text: 'text-red-500',
+    bg: 'bg-[rgba(255,107,107,0.1)]',
+    border: 'border-l-[#ff6b6b]',
+    text: 'text-[#ff6b6b]',
     label: 'пропущено',
   },
   info: {
     icon: ClipboardCheck,
-    bg: 'bg-blue-950/50',
-    border: 'border-l-blue-500',
-    text: 'text-blue-500',
+    bg: 'bg-[rgba(59,130,246,0.1)]',
+    border: 'border-l-[#93c5fd]',
+    text: 'text-[#93c5fd]',
     label: 'информация',
   },
 }
@@ -166,11 +166,11 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
   // Loading state
   if (loading) {
     return (
-      <Card className="border-slate-700 bg-slate-900">
+      <Card className="border-[rgba(0,210,170,0.09)] bg-[#060f1c]">
         <CardContent className="pt-6">
           <div className="flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
-            <span className="text-sm text-slate-300">
+            <span className="text-sm text-[rgba(204,232,225,0.6)]">
               Проверяю по клиническим рекомендациям...
             </span>
           </div>
@@ -182,17 +182,17 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
   // Error state
   if (error) {
     return (
-      <Card className="border-red-800 bg-red-950/30">
+      <Card className="border-[rgba(255,107,107,0.2)] bg-[rgba(255,107,107,0.05)]">
         <CardContent className="pt-6">
           <div className="flex items-center gap-2 mb-3">
-            <XCircle className="h-5 w-5 text-red-500" />
-            <p className="text-sm text-red-400">{error}</p>
+            <XCircle className="h-5 w-5 text-[#ff6b6b]" />
+            <p className="text-sm text-[#ff8888]">{error}</p>
           </div>
           <Button
             onClick={runCheck}
             variant="outline"
             size="sm"
-            className="border-slate-600 text-slate-300 hover:bg-slate-800"
+            className="border-[rgba(0,210,170,0.12)] text-[rgba(204,232,225,0.6)] hover:border-[rgba(0,210,170,0.3)]"
           >
             <RefreshCw className="h-3 w-3 mr-1" />
             Повторить
@@ -213,12 +213,12 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
   }
 
   return (
-    <Card className="border-slate-700 bg-slate-900">
+    <Card className="border-[rgba(0,210,170,0.09)] bg-[#060f1c]">
       <CardContent className="pt-6">
         {/* Header */}
         <div className="flex items-center gap-2 mb-4">
           <ClipboardCheck className="h-5 w-5 text-emerald-500" />
-          <h3 className="text-sm font-semibold text-slate-200">
+          <h3 className="text-sm font-semibold text-[rgba(204,232,225,0.9)]">
             Проверка по {guidelineId} &laquo;{guidelineName}&raquo;
           </h3>
         </div>
@@ -239,10 +239,10 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
                     <p className={`text-sm font-medium ${config.text}`}>
                       {item.title}
                     </p>
-                    <p className="text-xs text-slate-300 mt-1">
+                    <p className="text-xs text-[rgba(204,232,225,0.6)] mt-1">
                       {item.description}
                     </p>
-                    <p className="text-xs text-slate-500 mt-1 italic">
+                    <p className="text-xs text-[rgba(204,232,225,0.3)] mt-1 italic">
                       {item.krReference}
                     </p>
                   </div>
@@ -253,25 +253,25 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
         </div>
 
         {/* Summary bar */}
-        <div className="flex items-center gap-4 rounded-md bg-slate-800 px-3 py-2 text-xs mb-4">
-          <span className="flex items-center gap-1 text-green-500">
+        <div className="flex items-center gap-4 rounded-md bg-[#0a1525] px-3 py-2 text-xs mb-4">
+          <span className="flex items-center gap-1 text-[#34d399]">
             <CheckCircle2 className="h-3 w-3" />
             {summary.ok} соответствует
           </span>
-          <span className="flex items-center gap-1 text-yellow-500">
+          <span className="flex items-center gap-1 text-[#f5a623]">
             <AlertTriangle className="h-3 w-3" />
             {summary.warning} внимание
           </span>
-          <span className="flex items-center gap-1 text-red-500">
+          <span className="flex items-center gap-1 text-[#ff6b6b]">
             <XCircle className="h-3 w-3" />
             {summary.error} расхождений
           </span>
         </div>
 
         {/* Disclaimer */}
-        <div className="flex items-start gap-2 rounded-md bg-amber-950/30 border border-amber-800/50 p-3 mb-3">
-          <Shield className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-400/80">
+        <div className="flex items-start gap-2 rounded-md bg-[rgba(245,166,35,0.05)] border border-[rgba(245,166,35,0.2)] p-3 mb-3">
+          <Shield className="h-4 w-4 text-[#f5a623] flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-[rgba(204,232,225,0.5)]">
             ИИ-анализ носит информационный характер и не заменяет консультацию врача.
             Клинические рекомендации могут обновляться.
           </p>
@@ -282,7 +282,7 @@ export function KrCheckCard({ documentId, hasGuideline }: KrCheckCardProps) {
           onClick={runCheck}
           variant="outline"
           size="sm"
-          className="border-slate-600 text-slate-300 hover:bg-slate-800"
+          className="border-[rgba(0,210,170,0.12)] text-[rgba(204,232,225,0.6)] hover:border-[rgba(0,210,170,0.3)]"
         >
           <RefreshCw className="h-3 w-3 mr-1" />
           Повторить

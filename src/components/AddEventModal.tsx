@@ -106,28 +106,28 @@ export function AddEventModal({ metricName, isOpen, onClose, onEventAdded }: Add
   const selectedType = EVENT_TYPES[eventType as keyof typeof EVENT_TYPES]
   
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-md bg-[#060f1c] border border-[rgba(0,210,170,0.15)] rounded-xl">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg">
+          <CardTitle className="text-lg text-[#cce8e1]">
             Добавить событие на график
           </CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} className="text-[rgba(204,232,225,0.5)] hover:text-[rgba(204,232,225,0.8)]">
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
-        
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Метрика */}
             <div>
-              <label className="text-sm font-medium text-gray-700">График</label>
-              <p className="text-sm text-gray-500">{metricName}</p>
+              <label className="text-sm font-medium text-[rgba(204,232,225,0.6)]">График</label>
+              <p className="text-sm text-[rgba(204,232,225,0.4)]">{metricName}</p>
             </div>
-            
+
             {/* Тип события */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-[rgba(204,232,225,0.6)] mb-2">
                 Тип события
               </label>
               <div className="grid grid-cols-2 gap-2">
@@ -140,13 +140,13 @@ export function AddEventModal({ metricName, isOpen, onClose, onEventAdded }: Add
                       if (!label) setLabel(value.label)
                     }}
                     className={`p-2 text-left rounded-lg border text-sm flex items-center gap-2 transition-colors ${
-                      eventType === key 
-                        ? 'border-blue-500 bg-blue-50' 
-                        : 'border-gray-200 hover:border-gray-300'
+                      eventType === key
+                        ? 'border-[rgba(0,210,170,0.3)] bg-[rgba(0,210,170,0.1)] text-[#00d2aa]'
+                        : 'border-[rgba(0,210,170,0.09)] bg-[#0a1525] text-[rgba(204,232,225,0.5)] hover:border-[rgba(0,210,170,0.2)]'
                     }`}
                   >
-                    <span 
-                      className="w-3 h-3 rounded-full" 
+                    <span
+                      className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: value.color }}
                     />
                     <span>{value.icon}</span>
@@ -155,39 +155,39 @@ export function AddEventModal({ metricName, isOpen, onClose, onEventAdded }: Add
                 ))}
               </div>
             </div>
-            
+
             {/* Дата */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[rgba(204,232,225,0.6)] mb-1">
                 Дата события
               </label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-[rgba(0,210,170,0.12)] rounded-lg text-sm bg-[#0a1525] text-[rgba(204,232,225,0.8)]"
                 required
               />
             </div>
-            
+
             {/* Дата окончания (для госпитализации) */}
             {eventType === 'hospitalization' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-[rgba(204,232,225,0.6)] mb-1">
                   Дата выписки (опционально)
                 </label>
                 <input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-[rgba(0,210,170,0.12)] rounded-lg text-sm bg-[#0a1525] text-[rgba(204,232,225,0.8)]"
                 />
               </div>
             )}
-            
+
             {/* Название */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[rgba(204,232,225,0.6)] mb-1">
                 Описание
               </label>
               <input
@@ -195,43 +195,43 @@ export function AddEventModal({ metricName, isOpen, onClose, onEventAdded }: Add
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder={selectedType?.label || 'Краткое описание'}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-[rgba(0,210,170,0.12)] rounded-lg text-sm bg-[#0a1525] text-[rgba(204,232,225,0.8)] placeholder:text-[rgba(204,232,225,0.25)]"
               />
             </div>
-            
+
             {/* Заметки */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-[rgba(204,232,225,0.6)] mb-1">
                 Заметки (опционально)
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Дополнительные детали..."
-                className="w-full px-3 py-2 border rounded-lg text-sm resize-none"
+                className="w-full px-3 py-2 border border-[rgba(0,210,170,0.12)] rounded-lg text-sm bg-[#0a1525] text-[rgba(204,232,225,0.8)] placeholder:text-[rgba(204,232,225,0.25)] resize-none"
                 rows={2}
               />
             </div>
-            
+
             {/* Ошибка */}
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p className="text-sm text-[#ff6b6b]">{error}</p>
             )}
-            
+
             {/* Кнопки */}
             <div className="flex gap-2 pt-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                className="flex-1"
+                className="flex-1 border-[rgba(0,210,170,0.12)] bg-[#0a1525] text-[rgba(204,232,225,0.6)] hover:border-[rgba(0,210,170,0.3)]"
               >
                 Отмена
               </Button>
               <Button
                 type="submit"
                 disabled={loading}
-                className="flex-1"
+                className="flex-1 bg-[#00d2aa] text-[#030b14] hover:bg-[#00f0c6]"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

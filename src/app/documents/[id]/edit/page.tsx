@@ -55,14 +55,14 @@ export default async function EditDocumentPage({
 
       <div className="mb-6">
         <Link href={`/documents/${id}`}>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="text-[rgba(204,232,225,0.5)] hover:text-[rgba(204,232,225,0.8)]">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Назад к документу
           </Button>
         </Link>
       </div>
 
-      <h1 className="text-2xl font-bold mb-6">Редактирование документа</h1>
+      <h1 className="text-2xl font-bold mb-6 text-[#cce8e1]">Редактирование документа</h1>
 
       <DocumentForm initialData={documentData} mode="edit" />
     </main>

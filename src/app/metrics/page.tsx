@@ -59,11 +59,11 @@ function formatDate(dateStr: string): string {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    normal: 'bg-green-100 text-green-800',
-    low: 'bg-yellow-100 text-yellow-800',
-    high: 'bg-orange-100 text-orange-800',
-    critical: 'bg-red-100 text-red-800',
-    unknown: 'bg-gray-100 text-gray-600',
+    normal: 'bg-[rgba(0,210,170,0.1)] text-[#00d2aa]',
+    low: 'bg-[rgba(59,130,246,0.1)] text-[#93c5fd]',
+    high: 'bg-[rgba(245,166,35,0.1)] text-[#f5a623]',
+    critical: 'bg-[rgba(255,107,107,0.1)] text-[#ff6b6b]',
+    unknown: 'bg-[#0a1525] text-[rgba(204,232,225,0.4)]',
   }
 
   const labels: Record<string, string> = {
@@ -82,9 +82,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function TrendIcon({ direction }: { direction: 'up' | 'down' | 'stable' }) {
-  if (direction === 'up') return <TrendingUp className="h-4 w-4 text-green-600" />
-  if (direction === 'down') return <TrendingDown className="h-4 w-4 text-red-600" />
-  return <Minus className="h-4 w-4 text-gray-400" />
+  if (direction === 'up') return <TrendingUp className="h-4 w-4 text-[#34d399]" />
+  if (direction === 'down') return <TrendingDown className="h-4 w-4 text-[#ff6b6b]" />
+  return <Minus className="h-4 w-4 text-[rgba(204,232,225,0.4)]" />
 }
 
 export default function MetricsPage() {
@@ -124,7 +124,7 @@ export default function MetricsPage() {
               Назад
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl font-bold flex items-center gap-2 text-[#cce8e1]">
             <Activity className="h-6 w-6" />
             Динамика показателей
           </h1>
@@ -136,22 +136,22 @@ export default function MetricsPage() {
       </div>
 
       {data && (
-        <p className="text-sm text-gray-500 mb-6">
+        <p className="text-sm text-[rgba(204,232,225,0.4)] mb-6">
           Период: {formatDate(data.period.from)} — {formatDate(data.period.to)}
         </p>
       )}
 
       {error && (
-        <Card className="border-red-200 bg-red-50 mb-6">
+        <Card className="border-[rgba(255,107,107,0.2)] bg-[rgba(255,107,107,0.05)] mb-6">
           <CardContent className="py-4">
-            <p className="text-red-600">{error}</p>
+            <p className="text-[#ff6b6b]">{error}</p>
           </CardContent>
         </Card>
       )}
 
       {loading && !data && (
         <div className="flex items-center justify-center py-12">
-          <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+          <RefreshCw className="h-8 w-8 animate-spin text-[rgba(204,232,225,0.4)]" />
         </div>
       )}
 
@@ -185,17 +185,17 @@ export default function MetricsPage() {
                       <td className="py-3 px-3 text-center">
                         {metric.lastValue !== null ? `${metric.lastValue} ${metric.unit}` : '—'}
                       </td>
-                      <td className="py-3 px-3 text-center text-gray-500">
+                      <td className="py-3 px-3 text-center text-[rgba(204,232,225,0.5)]">
                         {metric.minValue !== null ? metric.minValue : '—'}
                       </td>
-                      <td className="py-3 px-3 text-center text-gray-500">
+                      <td className="py-3 px-3 text-center text-[rgba(204,232,225,0.5)]">
                         {metric.maxValue !== null ? metric.maxValue : '—'}
                       </td>
                       <td className="py-3 px-3 text-center">
                         <span className="inline-flex items-center gap-1">
                           <TrendIcon direction={metric.changeDirection} />
                           {metric.changePercent !== 0 && (
-                            <span className={metric.changeDirection === 'up' ? 'text-green-600' : 'text-red-600'}>
+                            <span className={metric.changeDirection === 'up' ? 'text-[#34d399]' : 'text-[#ff6b6b]'}>
                               {metric.changeDirection === 'up' ? '+' : ''}{metric.changePercent}%
                             </span>
                           )}
@@ -216,7 +216,7 @@ export default function MetricsPage() {
       {/* Графики */}
       {metricsWithData.length > 0 && (
         <div className="space-y-6">
-          <h2 className="text-lg font-semibold">Графики динамики</h2>
+          <h2 className="text-lg font-semibold text-[#cce8e1]">Графики динамики</h2>
           <div className="grid gap-6">
             {metricsWithData.map(metric => (
               <Card key={metric.name}>
@@ -231,19 +231,19 @@ export default function MetricsPage() {
 
       {/* Показатели без данных */}
       {metricsWithoutData.length > 0 && (
-        <Card className="mt-8 border-dashed">
+        <Card className="mt-8 border-dashed border-[rgba(0,210,170,0.09)]">
           <CardHeader>
-            <CardTitle className="text-lg text-gray-500">Показатели без данных</CardTitle>
+            <CardTitle className="text-lg text-[rgba(204,232,225,0.5)]">Показатели без данных</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="text-sm text-[rgba(204,232,225,0.4)] mb-3">
               Для этих показателей пока нет измерений за период лечения:
             </p>
             <div className="flex flex-wrap gap-2">
               {metricsWithoutData.map(metric => (
                 <span
                   key={metric.name}
-                  className="px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-600"
+                  className="px-3 py-1 bg-[#0a1525] rounded-full text-sm text-[rgba(204,232,225,0.5)]"
                 >
                   {metric.name}
                 </span>
@@ -255,11 +255,11 @@ export default function MetricsPage() {
 
       {/* Нет данных вообще */}
       {!loading && metricsWithData.length === 0 && !error && (
-        <Card className="border-dashed">
+        <Card className="border-dashed border-[rgba(0,210,170,0.09)]">
           <CardContent className="py-12 text-center">
-            <Activity className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-            <p className="text-gray-500">Нет данных о показателях за период лечения</p>
-            <p className="text-sm text-gray-400 mt-2">
+            <Activity className="h-12 w-12 mx-auto text-[rgba(204,232,225,0.2)] mb-4" />
+            <p className="text-[rgba(204,232,225,0.4)]">Нет данных о показателях за период лечения</p>
+            <p className="text-sm text-[rgba(204,232,225,0.3)] mt-2">
               Импортируйте документы с анализами через Telegram или веб-интерфейс
             </p>
           </CardContent>

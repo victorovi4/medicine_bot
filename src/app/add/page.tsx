@@ -11,14 +11,14 @@ export default function AddDocumentPage() {
       
       <div className="mb-6">
         <Link href="/">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="text-[rgba(204,232,225,0.5)] hover:text-[rgba(204,232,225,0.8)]">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Назад к истории
           </Button>
         </Link>
       </div>
-      
-      <h2 className="text-xl font-semibold mb-6">Добавить документ</h2>
+
+      <h2 className="text-xl font-semibold mb-6 text-[#cce8e1]">Добавить документ</h2>
       
       <DocumentForm />
     </main>

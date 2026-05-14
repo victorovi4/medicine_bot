@@ -50,7 +50,7 @@ export default async function DocumentPage({
       
       <div className="flex items-center justify-between mb-6">
         <Link href="/">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="text-[rgba(204,232,225,0.5)] hover:text-[rgba(204,232,225,0.8)]">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Назад к истории
           </Button>
@@ -59,24 +59,24 @@ export default async function DocumentPage({
         <DocumentActions documentId={document.id} documentTitle={document.title} />
       </div>
       
-      <Card>
+      <Card className="rounded-xl border border-[rgba(0,210,170,0.09)] bg-[#060f1c]">
         <CardHeader>
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                <Badge variant="outline" className="bg-[rgba(139,92,246,0.1)] text-[#c4b5fd] border-[rgba(139,92,246,0.2)]">
                   {getCategoryLabel(document.category)}
                 </Badge>
-                <Badge variant="outline">
+                <Badge variant="outline" className="bg-[#0a1525] text-[rgba(204,232,225,0.6)] border-[rgba(0,210,170,0.15)]">
                   {getSubtypeLabel(document.subtype)}
                 </Badge>
                 {document.specialty && (
-                  <Badge variant="secondary">{document.specialty}</Badge>
+                  <Badge variant="secondary" className="bg-[#0a1525] text-[rgba(204,232,225,0.5)]">{document.specialty}</Badge>
                 )}
               </div>
-              <CardTitle className="text-2xl">{document.title}</CardTitle>
+              <CardTitle className="text-2xl text-[#cce8e1]">{document.title}</CardTitle>
             </div>
-            <div className="flex items-center gap-1 text-gray-500">
+            <div className="flex items-center gap-1 text-[rgba(204,232,225,0.4)]">
               <Calendar className="h-4 w-4" />
               {formattedDate}
             </div>
@@ -88,19 +88,19 @@ export default async function DocumentPage({
           <div className="grid grid-cols-2 gap-4">
             {document.doctor && (
               <div className="flex items-center gap-2">
-                <User className="h-5 w-5 text-gray-400" />
+                <User className="h-5 w-5 text-[rgba(204,232,225,0.3)]" />
                 <div>
-                  <p className="text-sm text-gray-500">Врач</p>
-                  <p className="font-medium">{document.doctor}</p>
+                  <p className="text-xs text-[rgba(204,232,225,0.4)] font-[var(--font-geist-mono)] uppercase tracking-wide">Врач</p>
+                  <p className="text-sm text-[rgba(204,232,225,0.8)] font-medium">{document.doctor}</p>
                 </div>
               </div>
             )}
             {document.clinic && (
               <div className="flex items-center gap-2">
-                <Building className="h-5 w-5 text-gray-400" />
+                <Building className="h-5 w-5 text-[rgba(204,232,225,0.3)]" />
                 <div>
-                  <p className="text-sm text-gray-500">Учреждение</p>
-                  <p className="font-medium">{document.clinic}</p>
+                  <p className="text-xs text-[rgba(204,232,225,0.4)] font-[var(--font-geist-mono)] uppercase tracking-wide">Учреждение</p>
+                  <p className="text-sm text-[rgba(204,232,225,0.8)] font-medium">{document.clinic}</p>
                 </div>
               </div>
             )}
@@ -108,12 +108,12 @@ export default async function DocumentPage({
           
           {/* Заключение врача (дословное) */}
           {document.conclusion && (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
-              <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+            <div className="bg-[rgba(245,166,35,0.05)] border border-[rgba(245,166,35,0.15)] p-4 rounded-lg">
+              <h3 className="font-semibold text-[#f5a623] mb-2 flex items-center gap-2">
                 <ClipboardList className="h-5 w-5" />
                 Заключение врача
               </h3>
-              <p className="text-amber-900 whitespace-pre-wrap">{document.conclusion}</p>
+              <p className="text-[rgba(204,232,225,0.8)] whitespace-pre-wrap">{document.conclusion}</p>
             </div>
           )}
 
@@ -126,15 +126,15 @@ export default async function DocumentPage({
 
           {/* Рекомендации */}
           {document.recommendations && document.recommendations.length > 0 && (
-            <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-              <h3 className="font-semibold text-green-900 mb-3 flex items-center gap-2">
+            <div className="bg-[rgba(0,210,170,0.05)] border border-[rgba(0,210,170,0.15)] p-4 rounded-lg">
+              <h3 className="font-semibold text-[#00d2aa] mb-3 flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5" />
                 Рекомендации
               </h3>
               <ul className="space-y-2">
                 {document.recommendations.map((rec: string, index: number) => (
-                  <li key={index} className="flex items-start gap-2 text-green-800">
-                    <span className="bg-green-200 text-green-800 rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
+                  <li key={index} className="flex items-start gap-2 text-[rgba(204,232,225,0.8)]">
+                    <span className="bg-[rgba(0,210,170,0.15)] text-[#00d2aa] rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">
                       {index + 1}
                     </span>
                     <span>{rec}</span>
@@ -146,8 +146,8 @@ export default async function DocumentPage({
           
           {/* Проведённые процедуры */}
           {document.procedures && document.procedures.length > 0 && (
-            <div className="bg-purple-50 border border-purple-200 p-4 rounded-lg">
-              <h3 className="font-semibold text-purple-900 mb-3 flex items-center gap-2">
+            <div className="bg-[rgba(139,92,246,0.05)] border border-[rgba(139,92,246,0.15)] p-4 rounded-lg">
+              <h3 className="font-semibold text-[#c4b5fd] mb-3 flex items-center gap-2">
                 <Syringe className="h-5 w-5" />
                 Проведённые процедуры
               </h3>
@@ -155,15 +155,15 @@ export default async function DocumentPage({
                 {document.procedures.map((proc) => {
                   const procDate = new Date(proc.date).toLocaleDateString('ru-RU')
                   const details = proc.details as Record<string, string> | null
-                  
+
                   return (
-                    <li key={proc.id} className="flex items-start gap-3 text-purple-800">
-                      <span className="bg-purple-200 text-purple-800 rounded-full w-6 h-6 flex items-center justify-center text-sm flex-shrink-0 mt-0.5">
+                    <li key={proc.id} className="flex items-start gap-3 text-[rgba(204,232,225,0.8)]">
+                      <span className="bg-[rgba(139,92,246,0.15)] text-[#c4b5fd] rounded-full w-6 h-6 flex items-center justify-center text-sm flex-shrink-0 mt-0.5">
                         💉
                       </span>
                       <div>
                         <p className="font-medium">{proc.name}</p>
-                        <p className="text-sm text-purple-600">
+                        <p className="text-sm text-[rgba(204,232,225,0.5)]">
                           {procDate}
                           {proc.beforeValue !== null && proc.afterValue !== null && (
                             <span className="ml-2">
@@ -172,7 +172,7 @@ export default async function DocumentPage({
                           )}
                         </p>
                         {details && (
-                          <p className="text-sm text-purple-600">
+                          <p className="text-sm text-[rgba(204,232,225,0.5)]">
                             {details.bloodType && `Группа: ${details.bloodType}`}
                             {details.volume && ` • Объём: ${details.volume}`}
                             {details.component && ` • ${details.component}`}
@@ -188,21 +188,21 @@ export default async function DocumentPage({
           
           {/* AI-резюме */}
           {document.summary && (
-            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-              <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+            <div className="bg-[rgba(59,130,246,0.05)] border border-[rgba(59,130,246,0.15)] p-4 rounded-lg">
+              <h3 className="font-semibold text-[#93c5fd] mb-2 flex items-center gap-2">
                 <Sparkles className="h-5 w-5" />
                 AI-резюме
               </h3>
-              <p className="text-blue-800">{document.summary}</p>
+              <p className="text-[rgba(204,232,225,0.8)]">{document.summary}</p>
             </div>
           )}
           
           {/* Полный текст (опционально) */}
           {document.content && (
             <div>
-              <h3 className="font-semibold mb-2">Полный текст</h3>
+              <h3 className="font-semibold mb-2 text-[#cce8e1]">Полный текст</h3>
               <div className="prose prose-sm max-w-none">
-                <p className="whitespace-pre-wrap text-gray-700">{document.content}</p>
+                <p className="whitespace-pre-wrap text-[rgba(204,232,225,0.7)]">{document.content}</p>
               </div>
             </div>
           )}
@@ -210,7 +210,7 @@ export default async function DocumentPage({
           {/* Ключевые показатели */}
           {document.keyValues && Object.keys(document.keyValues as object).length > 0 && (
             <div>
-              <h3 className="font-semibold mb-2">Ключевые показатели</h3>
+              <h3 className="font-semibold mb-2 text-[#cce8e1]">Ключевые показатели</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {Object.entries(document.keyValues as Record<string, string>).map(
                   ([key, value]) => {
@@ -221,9 +221,9 @@ export default async function DocumentPage({
                       ? `${parsed.value} ${parsed.unit}`.trim()
                       : value
                     return (
-                      <div key={key} className="bg-gray-50 p-3 rounded">
-                        <p className="text-sm text-gray-500">{key}</p>
-                        <p className="font-semibold">{display}</p>
+                      <div key={key} className="bg-[#0a1525] p-3 rounded border border-[rgba(0,210,170,0.06)]">
+                        <p className="text-xs text-[rgba(204,232,225,0.4)] font-[var(--font-geist-mono)] uppercase tracking-wide">{key}</p>
+                        <p className="font-semibold text-[rgba(204,232,225,0.9)]">{display}</p>
                       </div>
                     )
                   }
@@ -235,10 +235,10 @@ export default async function DocumentPage({
           {/* Теги */}
           {document.tags && document.tags.length > 0 && (
             <div>
-              <h3 className="font-semibold mb-2">Теги</h3>
+              <h3 className="font-semibold mb-2 text-[#cce8e1]">Теги</h3>
               <div className="flex flex-wrap gap-2">
                 {document.tags.map((tag: string) => (
-                  <Badge key={tag} variant="secondary">
+                  <Badge key={tag} variant="secondary" className="bg-[#0a1525] text-[rgba(204,232,225,0.6)] border-[rgba(0,210,170,0.12)]">
                     {tag}
                   </Badge>
                 ))}
@@ -248,21 +248,21 @@ export default async function DocumentPage({
           
           {/* Файл */}
           {document.fileUrl && (
-            <div className="border-t pt-4">
-              <h3 className="font-semibold mb-3">Прикреплённый файл</h3>
+            <div className="border-t border-[rgba(0,210,170,0.09)] pt-4">
+              <h3 className="font-semibold mb-3 text-[#cce8e1]">Прикреплённый файл</h3>
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-gray-600">
+                <div className="flex items-center gap-2 text-[rgba(204,232,225,0.6)]">
                   <FileText className="h-5 w-5" />
                   <span>{document.fileName}</span>
                 </div>
                 <a href={document.fileUrl} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="border-[rgba(0,210,170,0.2)] text-[rgba(204,232,225,0.7)] hover:border-[rgba(0,210,170,0.4)]">
                     <Download className="h-4 w-4 mr-2" />
                     Открыть файл
                   </Button>
                 </a>
               </div>
-              
+
               {/* Превью для изображений */}
               {document.fileType?.startsWith('image/') && (
                 <div className="mt-4">
@@ -270,17 +270,17 @@ export default async function DocumentPage({
                   <img
                     src={document.fileUrl}
                     alt={document.fileName || 'Document scan'}
-                    className="max-w-full h-auto rounded-lg border"
+                    className="max-w-full h-auto rounded-lg border border-[rgba(0,210,170,0.09)]"
                   />
                 </div>
               )}
-              
+
               {/* Превью для PDF */}
               {document.fileType === 'application/pdf' && (
-                <div className="mt-4">
+                <div className="mt-4 rounded-lg border border-[rgba(0,210,170,0.09)] bg-[#0a1525] overflow-hidden">
                   <iframe
                     src={document.fileUrl}
-                    className="w-full h-[600px] rounded-lg border"
+                    className="w-full h-[600px]"
                     title={document.fileName || 'PDF document'}
                   />
                 </div>

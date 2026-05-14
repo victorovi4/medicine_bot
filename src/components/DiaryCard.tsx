@@ -59,17 +59,17 @@ export function DiaryCard({ type, title, date, subtype, diaryData }: DiaryCardPr
   const icon = type === 'vital' ? getVitalIcon(subtype) : typeIcons[type]
 
   return (
-    <Card className={`border-l-4 ${borderColors[type]}`}>
+    <Card className={`border-l-4 ${borderColors[type]} rounded-xl border-[rgba(0,210,170,0.09)] bg-[#060f1c]`}>
       <CardContent className="py-3 px-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-2 min-w-0">
             <span className="text-lg flex-shrink-0 mt-0.5">{icon}</span>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-sm">{title}</span>
-                <span className="text-xs text-gray-400">{typeLabels[type]}</span>
+                <span className="font-medium text-sm text-[rgba(204,232,225,0.9)]">{title}</span>
+                <span className="text-xs text-[rgba(204,232,225,0.3)]">{typeLabels[type]}</span>
               </div>
-              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-sm text-gray-600">
+              <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-sm text-[rgba(204,232,225,0.5)]">
                 {/* Symptom details */}
                 {type === 'symptom' && diaryData?.intensity != null && (
                   <span>Интенсивность: {diaryData.intensity}/10</span>
@@ -80,7 +80,7 @@ export function DiaryCard({ type, title, date, subtype, diaryData }: DiaryCardPr
 
                 {/* Vital sign details */}
                 {type === 'vital' && diaryData?.value != null && (
-                  <span className="font-medium">
+                  <span className="font-medium text-[rgba(204,232,225,0.8)]">
                     {diaryData.value}
                     {diaryData.value2 != null && `/${diaryData.value2}`}
                     {diaryData.unit && ` ${diaryData.unit}`}
@@ -95,17 +95,17 @@ export function DiaryCard({ type, title, date, subtype, diaryData }: DiaryCardPr
                   <span>{diaryData.frequency}</span>
                 )}
                 {type === 'medication' && diaryData?.isActive != null && (
-                  <span className={diaryData.isActive ? 'text-green-600' : 'text-gray-400'}>
+                  <span className={diaryData.isActive ? 'text-[#00d2aa]' : 'text-[rgba(204,232,225,0.3)]'}>
                     {diaryData.isActive ? 'Активный' : 'Завершён'}
                   </span>
                 )}
               </div>
               {diaryData?.notes && (
-                <p className="text-xs text-gray-500 mt-1 line-clamp-1">{diaryData.notes}</p>
+                <p className="text-xs text-[rgba(204,232,225,0.4)] mt-1 line-clamp-1">{diaryData.notes}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-400 flex-shrink-0 whitespace-nowrap">
+          <div className="flex items-center gap-1 text-xs text-[rgba(204,232,225,0.3)] flex-shrink-0 whitespace-nowrap">
             <Calendar className="h-3 w-3" />
             <span>{formattedDate}</span>
             {type !== 'medication' && <span>{formattedTime}</span>}
