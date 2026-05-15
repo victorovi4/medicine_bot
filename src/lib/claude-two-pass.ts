@@ -342,11 +342,33 @@ const METRIC_NAME_MAP: Record<string, string> = {
   'тромб': 'Тромбоциты',
 }
 
+// Подметрики и дополнительные показатели CBC/биохимии, которые содержат подстроку
+// "гемоглобин" / "эритроц" и т.п., но НЕ являются основной метрикой.
+// MCHC (Средняя концентрация гемоглобина в эритроците, ~330 г/л) — частый источник
+// ложных точек "Гемоглобин = 339" на графиках.
+const EXCLUDE_SUBSTRINGS = [
+  'mchc', 'mch ', '(mch)', 'mcv', 'mpv', 'rdw', 'pdw', 'p-lcr', 'plcr',
+  'средн', // "средняя концентрация ...", "среднее содержание ..."
+  'ширин', // "ширина распределения ..."
+  'распред', // "распределение эритроцитов по объему"
+  'коэф',  // "коэффициент больших тромбоцитов"
+  'объем', // "средний объем тромбоцита/эритроцита"
+  'содерж', // "содержание крупных тромбоцитов"
+  'крупн',
+  'незрел', // "незрелые гранулоциты"
+  'гликир', // "гликированный гемоглобин" — отдельная метрика (HbA1c)
+  'нrbc', 'nrbc',
+]
+
 function canonicalizeMetricName(rowName: string | undefined | null): string | null {
   if (!rowName) return null
   // Убираем содержимое скобок и аббревиатуры
   const cleaned = rowName.replace(/[()[\]{}]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
   if (cleaned.length < 2) return null
+  // Эвристика для подметрик CBC и др. показателей-производных — отсекаем заранее.
+  for (const ex of EXCLUDE_SUBSTRINGS) {
+    if (cleaned.includes(ex)) return null
+  }
   // Сначала точное совпадение
   if (METRIC_NAME_MAP[cleaned]) return METRIC_NAME_MAP[cleaned]
   // Затем bidirectional substring matching: либо ключ внутри cleaned, либо cleaned внутри ключа.
