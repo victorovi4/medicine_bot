@@ -26,14 +26,14 @@ export interface CandidateMeasurement {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function isValueClose(a: number, b: number): boolean {
+export function isValueClose(a: number, b: number): boolean {
   const diff = Math.abs(a - b)
   if (diff < 0.5) return true
   const rel = diff / Math.max(Math.abs(a), Math.abs(b), 1)
   return rel <= 0.05
 }
 
-function isDateClose(a: Date, b: Date): boolean {
+export function isDateClose(a: Date, b: Date): boolean {
   return Math.abs(a.getTime() - b.getTime()) <= DAY_MS
 }
 

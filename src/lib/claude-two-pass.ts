@@ -358,28 +358,48 @@ const EXCLUDE_SUBSTRINGS = [
   'незрел', // "незрелые гранулоциты"
   'гликир', // "гликированный гемоглобин" — отдельная метрика (HbA1c)
   'нrbc', 'nrbc',
+  // Соотношения и индексы: "Соотношение ПСА свободный/ПСА общий" (в %) — не ПСА общий.
+  'соотнош', 'отношен', 'индекс', 'ratio', '/пса',
 ]
 
-function canonicalizeMetricName(rowName: string | undefined | null): string | null {
+// Показатели мочи ("Лейкоциты [#/объем] в моче", "Белок мочи"), но не "мочевина"/"мочевая кислота".
+const URINE_RE = /моч(?!ев)/
+
+// Ключи от длинных к коротким: "пса свободный" должен победить "пса".
+const METRIC_KEYS_BY_LENGTH = Object.entries(METRIC_NAME_MAP).sort((a, b) => b[0].length - a[0].length)
+
+export function canonicalizeMetricName(rowName: string | undefined | null): string | null {
   if (!rowName) return null
-  // Убираем содержимое скобок и аббревиатуры
-  const cleaned = rowName.replace(/[()[\]{}]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+  // Квалификаторы в квадратных скобках ("[масса / объем]", "[# / объем]") — служебные, убираем целиком,
+  // иначе "Гемоглобин [масса / объем] в крови" отсекается исключением 'объем'.
+  // Содержимое круглых скобок оставляем: там аббревиатуры ("Гемоглобин (HGB)").
+  const cleaned = rowName
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[(){}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
   if (cleaned.length < 2) return null
   // Эвристика для подметрик CBC и др. показателей-производных — отсекаем заранее.
   for (const ex of EXCLUDE_SUBSTRINGS) {
     if (cleaned.includes(ex)) return null
   }
+  if (URINE_RE.test(cleaned)) return null
   // Сначала точное совпадение
   if (METRIC_NAME_MAP[cleaned]) return METRIC_NAME_MAP[cleaned]
-  // Затем bidirectional substring matching: либо ключ внутри cleaned, либо cleaned внутри ключа.
+  // Затем substring matching: ключ внутри cleaned, либо cleaned — начало ключа ("тромб" → "тромбоциты").
   // Cleaned должен быть достаточно длинным (>= 3) чтобы не дать ложных совпадений
-  // (например "ал" не должен матчиться на "алт").
-  for (const [key, canonical] of Object.entries(METRIC_NAME_MAP)) {
+  // (например "ал" не должен матчиться на "алт", "белок" — на "с-реактивный белок").
+  for (const [key, canonical] of METRIC_KEYS_BY_LENGTH) {
     if (cleaned.includes(key)) return canonical
-    if (cleaned.length >= 3 && key.includes(cleaned)) return canonical
+    if (cleaned.length >= 3 && key.startsWith(cleaned)) return canonical
   }
   return null
 }
+
+// Строки, у которых название показателя стоит в заголовке таблицы (формат Хеликса):
+// "## Простатспецифический антиген (ПСА) общий" → "Концентрация: 0.029 нг/мл".
+const GENERIC_ROW_RE = /^(концентрация|результат|значение|уровень|количество)$/i
 
 /**
  * Преобразует дату из "DD.MM.YYYY" / "DD.MM.YYYY HH:MM" / "YYYY-MM-DD" в ISO YYYY-MM-DD.
@@ -405,14 +425,23 @@ export function buildMeasurementsDynamicsFromExtracted(extracted: ExtractedDocum
   const result: { name: string; unit: string; values: { date: string; value: number }[] }[] = []
   for (const page of extracted.pages || []) {
     for (const table of page.tables || []) {
-      if (!table.dates || table.dates.length === 0) continue
-      for (const row of table.rows || []) {
-        const canonical = canonicalizeMetricName(row.name)
+      // Таблица без дат (одиночный анализ) — берём дату документа.
+      const dates = table.dates && table.dates.length > 0
+        ? table.dates
+        : extracted.documentDate ? [extracted.documentDate] : null
+      if (!dates) continue
+      if (URINE_RE.test((table.title || '').toLowerCase())) continue
+      const rows = table.rows || []
+      for (const row of rows) {
+        let canonical = canonicalizeMetricName(row.name)
+        if (!canonical && (rows.length === 1 || GENERIC_ROW_RE.test((row.name || '').trim()))) {
+          canonical = canonicalizeMetricName(table.title)
+        }
         if (!canonical) continue
         const values: { date: string; value: number }[] = []
-        for (let i = 0; i < table.dates.length; i++) {
+        for (let i = 0; i < dates.length; i++) {
           const v = row.values?.[i]
-          const dateStr = parseExtractedDate(table.dates[i])
+          const dateStr = parseExtractedDate(dates[i])
           if (typeof v === 'number' && !Number.isNaN(v) && dateStr) {
             values.push({ date: dateStr, value: v })
           }
@@ -488,6 +517,45 @@ export function buildFullTextFromExtracted(extracted: ExtractedDocument): string
     }
   }
   return parts.join('\n')
+}
+
+// "Гемоглобин (HGB): 82 | 72 | 110 г/л [130-160]" — формат строки из buildFullTextFromExtracted.
+const NUM = String.raw`-?\d+(?:\.\d+)?(?:e[-+]?\d+)?`
+const FULLTEXT_ROW_RE = new RegExp(String.raw`^(.+?):\s+((?:${NUM}|—)(?:\s\|\s(?:${NUM}|—))*)(?:\s+(.*))?$`)
+
+/**
+ * Обратная операция к buildFullTextFromExtracted: восстанавливает таблицы из сохранённого fullText.
+ * Позволяет пересобрать measurements уже загруженных документов без повторного OCR (без затрат на API).
+ * Нормы не восстанавливаются — для measurementsDynamics они не нужны.
+ */
+export function parseTablesFromFullText(fullText: string, documentDate: string | null): ExtractedDocument {
+  const tables: ExtractedTable[] = []
+  let current: ExtractedTable | null = null
+  for (const rawLine of fullText.split('\n')) {
+    const line = rawLine.trim()
+    if (line.startsWith('## ')) {
+      current = { title: line.slice(3).trim(), dates: null, rows: [] }
+      tables.push(current)
+      continue
+    }
+    if (!current) continue
+    if (current.dates === null && current.rows.length === 0 && line.startsWith('Даты:')) {
+      current.dates = line.slice('Даты:'.length).split('|').map(s => s.trim())
+      continue
+    }
+    const m = line.match(FULLTEXT_ROW_RE)
+    if (!m) {
+      current = null  // таблица закончилась (пустая строка или текст)
+      continue
+    }
+    const values = m[2].split(' | ').map(s => (s === '—' ? null : Number(s)))
+    const unit = (m[3] || '').replace(/\s*\[[^\]]*\]$/, '').trim() || null
+    current.rows.push({ name: m[1].trim(), unit, normalMin: null, normalMax: null, values })
+  }
+  return {
+    documentType: '', documentDate, patientName: null, clinic: null, doctor: null,
+    pages: [{ pageNumber: 1, tables, textBlocks: [] }],
+  }
 }
 
 /**
