@@ -1,110 +1,14 @@
 /**
- * Конфигурация отслеживаемых показателей.
- * Нормы, единицы измерения, цвета для графиков.
+ * Отслеживаемые показатели: извлечение из keyValues, статусы, форматирование.
+ * Справочник (нормы, группы) — в metrics-config.ts, канонизация названий — в metric-names.ts.
  */
 
 import { PATIENT } from '@/lib/patient'
+import { METRICS_CONFIG, isPlausibleValue, type MetricConfig } from '@/lib/metrics-config'
+import { canonicalizeMetricName } from '@/lib/metric-names'
 
-export interface MetricConfig {
-  name: string           // Название показателя
-  aliases: string[]      // Альтернативные названия для парсинга
-  unit: string           // Единица измерения
-  normalMin: number      // Нижняя граница нормы
-  normalMax: number      // Верхняя граница нормы
-  critical?: number      // Критическое значение (опционально)
-  color: string          // Цвет на графике
-  description: string    // Описание для UI
-}
-
-/**
- * Справочник отслеживаемых показателей.
- * Ключ — каноническое название.
- */
-export const METRICS_CONFIG: Record<string, MetricConfig> = {
-  'ПСА общий': {
-    name: 'ПСА общий',
-    aliases: ['ПСА', 'PSA', 'PSA total', 'ПСА общ', 'Простатический специфический антиген'],
-    unit: 'нг/мл',
-    normalMin: 0,
-    normalMax: 4.0,
-    critical: 10.0,
-    color: '#ef4444', // Красный — онкомаркер
-    description: 'Простатический специфический антиген (онкомаркер)',
-  },
-  'ПСА свободный': {
-    name: 'ПСА свободный',
-    aliases: ['ПСА своб', 'PSA free', 'fPSA', 'Свободный ПСА'],
-    unit: 'нг/мл',
-    normalMin: 0,
-    normalMax: 0.93,
-    color: '#f97316', // Оранжевый
-    description: 'Свободная фракция ПСА',
-  },
-  'Гемоглобин': {
-    name: 'Гемоглобин',
-    aliases: ['Hb', 'HGB', 'Hemoglobin', 'Гемоглоб'],
-    unit: 'г/л',
-    normalMin: 130,
-    normalMax: 160,
-    color: '#3b82f6', // Синий
-    description: 'Уровень гемоглобина в крови',
-  },
-  'СРБ': {
-    name: 'СРБ',
-    aliases: ['C-реактивный белок', 'CRP', 'C-reactive protein', 'С-реактивный белок', 'СРБ ультрачувствительный', 'hs-CRP', 'СРБ количественно'],
-    unit: 'мг/л',
-    normalMin: 0,
-    normalMax: 5.0,
-    critical: 50.0, // Высокий уровень воспаления
-    color: '#f59e0b', // Янтарный — маркер воспаления
-    description: 'C-реактивный белок — маркер воспаления',
-  },
-  'Парапротеин': {
-    name: 'Парапротеин',
-    aliases: ['М-градиент', 'M-protein', 'М-белок', 'M-градиент', 'Парапротеин (М-градиент)', 'M-spike'],
-    unit: 'г/л',
-    normalMin: 0,
-    normalMax: 0,
-    color: '#8b5cf6', // Фиолетовый — маркер миеломы
-    description: 'Парапротеин (М-градиент) — маркер множественной миеломы',
-  },
-  'Глюкоза': {
-    name: 'Глюкоза',
-    aliases: ['Glucose', 'Сахар крови', 'GLU', 'Глюкоза крови', 'Глюкоза натощак'],
-    unit: 'ммоль/л',
-    normalMin: 3.9,
-    normalMax: 6.1,
-    color: '#10b981', // Зелёный
-    description: 'Уровень глюкозы в крови',
-  },
-  'Гликированный гемоглобин': {
-    name: 'Гликированный гемоглобин',
-    aliases: ['HbA1c', 'A1c', 'Гликозилированный гемоглобин', 'Glycated hemoglobin'],
-    unit: '%',
-    normalMin: 4.0,
-    normalMax: 6.0,
-    color: '#06b6d4', // Циан
-    description: 'Гликированный гемоглобин (HbA1c) — контроль диабета',
-  },
-  'Тромбоциты': {
-    name: 'Тромбоциты',
-    aliases: ['PLT', 'Platelets', 'Тромб.', 'Тромбоц.'],
-    unit: '×10⁹/л',
-    normalMin: 150,
-    normalMax: 400,
-    color: '#ec4899', // Розовый
-    description: 'Количество тромбоцитов в крови',
-  },
-  'Лейкоциты': {
-    name: 'Лейкоциты',
-    aliases: ['WBC', 'Leukocytes', 'Лейкоц.', 'Лейк.', 'White blood cells'],
-    unit: '×10⁹/л',
-    normalMin: 4.0,
-    normalMax: 9.0,
-    color: '#14b8a6', // Тил
-    description: 'Количество лейкоцитов в крови',
-  },
-}
+export { METRICS_CONFIG, METRIC_GROUPS, isPlausibleValue } from '@/lib/metrics-config'
+export type { MetricConfig, MetricGroup } from '@/lib/metrics-config'
 
 /**
  * Список всех отслеживаемых показателей.
@@ -131,47 +35,13 @@ export function getActiveMetricsConfig(): Record<string, MetricConfig> {
 }
 
 /**
- * Получить конфиг метрики по названию (с учётом алиасов).
+ * Получить конфиг метрики по названию (точное имя, алиас или строка из анализа).
  */
 export function getMetricConfig(name: string): MetricConfig | null {
-  // Точное совпадение
-  if (METRICS_CONFIG[name]) {
-    return METRICS_CONFIG[name]
-  }
-
-  const nameLower = name.toLowerCase().trim()
-
-  // Поиск по точному совпадению ключа/алиаса
-  for (const [key, config] of Object.entries(METRICS_CONFIG)) {
-    if (key.toLowerCase() === nameLower) {
-      return config
-    }
-    for (const alias of config.aliases) {
-      if (alias.toLowerCase() === nameLower) {
-        return config
-      }
-    }
-  }
-
-  // Частичное совпадение: "Гемоглобин (HGB)" начинается с "Гемоглобин"
-  // или содержит алиас в скобках: "Лейкоциты (WBC)" → алиас "WBC"
-  for (const [key, config] of Object.entries(METRICS_CONFIG)) {
-    if (nameLower.startsWith(key.toLowerCase())) {
-      return config
-    }
-    for (const alias of config.aliases) {
-      const aliasLower = alias.toLowerCase()
-      if (nameLower.startsWith(aliasLower + ' ') || nameLower.startsWith(aliasLower + '(')) {
-        return config
-      }
-      // "Название (ALIAS)" — алиас в скобках
-      if (nameLower.includes('(' + aliasLower + ')')) {
-        return config
-      }
-    }
-  }
-
-  return null
+  if (!name) return null
+  if (METRICS_CONFIG[name]) return METRICS_CONFIG[name]
+  const canonical = canonicalizeMetricName(name)
+  return canonical ? METRICS_CONFIG[canonical] ?? null : null
 }
 
 /**
@@ -232,12 +102,12 @@ function validateAndCorrectValue(
       return { value: value * 10, corrected: true }
     }
   }
-  
+
   // ПСА: отрицательные значения невозможны
   if (metricName.includes('ПСА') && value < 0) {
     return { value: 0, corrected: true }
   }
-  
+
   return { value, corrected: false }
 }
 
@@ -256,19 +126,22 @@ export function extractMeasurements(
   const measurements: Array<{ name: string; value: number; unit: string; normalMin?: number; normalMax?: number; isAbnormal?: boolean }> = []
 
   for (const [key, valueStr] of Object.entries(keyValues)) {
-    // Проверяем, отслеживаем ли мы этот показатель
-    const canonicalName = getCanonicalMetricName(key)
-    if (!canonicalName) continue
-
-    const config = METRICS_CONFIG[canonicalName]
-    if (!config) continue
+    if (typeof valueStr !== 'string') continue
 
     // Парсим значение
     const parsed = parseValueWithUnit(valueStr)
     if (!parsed) continue
 
+    // Проверяем, отслеживаем ли мы этот показатель (единица различает "Нейтрофилы" и "Нейтрофилы %")
+    const canonicalName = canonicalizeMetricName(key, parsed.unit)
+    if (!canonicalName) continue
+
+    const config = METRICS_CONFIG[canonicalName]
+    if (!config) continue
+
     // Валидируем и корректируем значение
     const { value: correctedValue } = validateAndCorrectValue(canonicalName, parsed.value)
+    if (!isPlausibleValue(canonicalName, correctedValue)) continue
 
     // Определяем normalMin/normalMax: приоритет — из документа, затем из конфига
     const normalMin = parsed.normalMin ?? config.normalMin
@@ -301,19 +174,19 @@ export function getValueStatus(
 ): 'normal' | 'low' | 'high' | 'critical' | 'unknown' {
   const config = getMetricConfig(metricName)
   if (!config) return 'unknown'
-  
+
   if (config.critical !== undefined && value >= config.critical) {
     return 'critical'
   }
-  
+
   if (value < config.normalMin) {
     return 'low'
   }
-  
+
   if (value > config.normalMax) {
     return 'high'
   }
-  
+
   return 'normal'
 }
 
@@ -336,13 +209,13 @@ export function calculateChange(oldValue: number, newValue: number): {
   if (oldValue === 0) {
     return { percent: 0, direction: 'stable' }
   }
-  
+
   const percent = ((newValue - oldValue) / oldValue) * 100
-  
+
   if (Math.abs(percent) < 1) {
     return { percent: 0, direction: 'stable' }
   }
-  
+
   return {
     percent: Math.round(percent),
     direction: percent > 0 ? 'up' : 'down',

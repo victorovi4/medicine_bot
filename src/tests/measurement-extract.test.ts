@@ -22,7 +22,7 @@ describe('canonicalizeMetricName', () => {
 
   it('по-прежнему отсекает производные показатели ОАК', () => {
     expect(canonicalizeMetricName('Средняя концентрация гемоглобина (MCHC) [масса / объем] в эритроците')).toBeNull()
-    expect(canonicalizeMetricName('Средний объем эритроцитов (MCV) автоматизированным подсчетом')).toBeNull()
+    expect(canonicalizeMetricName('Средний объем эритроцитов (MCV) автоматизированным подсчетом')).toBe('MCV') // с 10.2026 MCV отслеживается
   })
 
   it('не берёт показатели мочи', () => {
@@ -116,6 +116,9 @@ describe('parseTablesFromFullText', () => {
       { name: 'Гемоглобин', unit: 'г/л', values: [
         { date: '2026-04-21', value: 82 }, { date: '2026-04-22', value: 72 }, { date: '2026-04-25', value: 110 },
       ] },
+      { name: 'MCV', unit: 'фл', values: [
+        { date: '2026-04-21', value: 109.3 }, { date: '2026-04-22', value: 112.6 }, { date: '2026-04-25', value: 102.4 },
+      ] },
     ])
   })
 
@@ -123,5 +126,125 @@ describe('parseTablesFromFullText', () => {
     const fullText = '## Биохимия\nДаты: 21.04.2026 | 22.04.2026\nС-реактивный белок: — | 40 мг/л'
     const dyn = buildMeasurementsDynamicsFromExtracted(parseTablesFromFullText(fullText, null))
     expect(dyn).toEqual([{ name: 'СРБ', unit: 'мг/л', values: [{ date: '2026-04-22', value: 40 }] }])
+  })
+})
+
+// Реальные строки из карты Иоффе В.Б.: расширение набора показателей (10.2026)
+describe('canonicalizeMetricName — расширенный набор показателей', () => {
+  it('MCV распознаётся во всех вариантах написания, но не RDW/MPV', () => {
+    expect(canonicalizeMetricName('Средний объем эритроцита (MCV)')).toBe('MCV')
+    expect(canonicalizeMetricName('Ср.объем эритр (MCV)')).toBe('MCV')
+    expect(canonicalizeMetricName('MCV')).toBe('MCV')
+    expect(canonicalizeMetricName('MCV (средний объем эритроцита)')).toBe('MCV')
+    expect(canonicalizeMetricName('Средний объем эритроцита в крови методом автоматизированного подсчёта')).toBe('MCV')
+    expect(canonicalizeMetricName('Средний объем тромбоцита (MPV)')).toBeNull()
+    expect(canonicalizeMetricName('Распр. эрит. по V - станд отклон(RDW-SD)')).toBeNull()
+    expect(canonicalizeMetricName('Стандартное отклонение ширины распределения эритроцитов по объему эритроцитов по объему')).toBeNull()
+    expect(canonicalizeMetricName('Средн. сод. гемоглобина в эр-те (MCH)')).toBeNull()
+    expect(canonicalizeMetricName('MCH')).toBeNull()
+  })
+
+  it('лейкоцитарная формула: абсолютные и относительные значения — разные метрики', () => {
+    expect(canonicalizeMetricName('Нейтрофилы (NE)', '*10^9/л')).toBe('Нейтрофилы')
+    expect(canonicalizeMetricName('Нейтрофилы, % (NE%)', '%')).toBe('Нейтрофилы %')
+    expect(canonicalizeMetricName('Нейтрофилы (NEUT= BAND + SEG)', '10^9/л')).toBe('Нейтрофилы')
+    expect(canonicalizeMetricName('Нейтрофилы % (NEUT% = BAND% + SEG%)', '%')).toBe('Нейтрофилы %')
+    expect(canonicalizeMetricName('Нейтрофилы абс.', 'х10^9/л')).toBe('Нейтрофилы')
+    expect(canonicalizeMetricName('Нейтрофилы', '%')).toBe('Нейтрофилы %')
+    expect(canonicalizeMetricName('NEUT (Абс.количество нейтрофилов)', '10^9/л')).toBe('Нейтрофилы')
+    expect(canonicalizeMetricName('АЧН', 'х10*9/л')).toBe('Нейтрофилы')
+    expect(canonicalizeMetricName('Лимфоциты / 100 лейкоцитов в крови автоматизированным подсчетом', '%')).toBe('Лимфоциты %')
+    expect(canonicalizeMetricName('Лимфоциты [# / объем] в крови автоматизированным подсчетом', '10^9/л')).toBe('Лимфоциты')
+    expect(canonicalizeMetricName('LYM# (абсолютное кол-во лимфоцитов)', '10^9/л')).toBe('Лимфоциты')
+    expect(canonicalizeMetricName('Лимфоциты, относительное количество в крови методом ручного подсчёта', '%')).toBe('Лимфоциты %')
+    expect(canonicalizeMetricName('Моноциты (MO)', '*10^9/л')).toBe('Моноциты')
+    expect(canonicalizeMetricName('Моноциты, % (МО%)', '%')).toBe('Моноциты %')
+    expect(canonicalizeMetricName('MON# (моноциты)', '10^9/л')).toBe('Моноциты')
+    expect(canonicalizeMetricName('Моноциты (микроскопия)', '%')).toBe('Моноциты %')
+    expect(canonicalizeMetricName('Моноциты/100 лейкоцитов в крови автоматизированным подсчетом', '%')).toBe('Моноциты %')
+  })
+
+  it('подвиды нейтрофилов, миелограмма, эозинофилы/базофилы — не отслеживаем', () => {
+    expect(canonicalizeMetricName('Нейтрофилы: палочк.', '%')).toBeNull()
+    expect(canonicalizeMetricName('Нейтрофилы:Сегментоядерные', '%')).toBeNull()
+    expect(canonicalizeMetricName('Нейтрофилы палочкоядерные, абсолютное количество в крови методом автоматизированного подсчёта', '10^9/л')).toBeNull()
+    expect(canonicalizeMetricName('Нейтрофилы:Миелоциты', '%')).toBeNull()
+    expect(canonicalizeMetricName('Всего клеток лимфоц. ростка', '%')).toBeNull()
+    expect(canonicalizeMetricName('Эозинофилы / 100 лейкоцитов в крови автоматизированным подсчетом', '%')).toBeNull()
+    expect(canonicalizeMetricName('Базофилы/100 лейкоцитов в крови методом автоматизированного подсчета', '%')).toBeNull()
+    expect(canonicalizeMetricName('Незрелые гранулоциты (IG)', '10^9/л')).toBeNull()
+  })
+
+  it('коагулограмма и тромбокрит не попадают в Тромбоциты', () => {
+    expect(canonicalizeMetricName('Тромбокрит (PCT)', '%')).toBeNull()
+    expect(canonicalizeMetricName('PCT (тромбокрит)', '%')).toBeNull()
+    expect(canonicalizeMetricName('Активированное частичное тромбопластиновое время', 'с')).toBeNull()
+    expect(canonicalizeMetricName('АЧТВ', 'сек')).toBeNull()
+    expect(canonicalizeMetricName('% протромбина по Квику', '%')).toBeNull()
+    expect(canonicalizeMetricName('Протромбиновое время в бедной тромбоцитами плазме', 'с')).toBeNull()
+    expect(canonicalizeMetricName('Тромбиновое время', 'сек')).toBeNull()
+    expect(canonicalizeMetricName('Международное нормализованное отношение в бедной тромбоцитами плазме')).toBeNull()
+    expect(canonicalizeMetricName('Тромбоциты (PLT)', '*10^9/л')).toBe('Тромбоциты')
+    expect(canonicalizeMetricName('Тромб.', '10^9/л')).toBe('Тромбоциты')
+    expect(canonicalizeMetricName('PLT (общее кол-во тромбоцитов)', '10^9/л')).toBe('Тромбоциты')
+    // "фибриноген" длиннее "тромбоцит" — побеждает фибриноген
+    expect(canonicalizeMetricName('Фибриноген [масса / объем] в плазме бедной тромбоцитами', 'г/л')).toBe('Фибриноген')
+    expect(canonicalizeMetricName('Фибриноген по Клауссу', 'г/л')).toBe('Фибриноген')
+  })
+
+  it('АСТ/АЛТ только как целое слово, прайс-лист и антитела — мимо', () => {
+    expect(canonicalizeMetricName('АСТ (Аспартатаминотрансфераза)', 'Ед/л')).toBe('АСТ')
+    expect(canonicalizeMetricName('Исследование уровня аспартатаминотрансферазы в крови (ACT)', 'Ед/л')).toBe('АСТ')
+    expect(canonicalizeMetricName('Аспартатаминотрансфера (АсАТ)', 'Ед/л')).toBe('АСТ')
+    expect(canonicalizeMetricName('Аланинаминотрансфераза (АлАТ)', 'Ед/л')).toBe('АЛТ')
+    expect(canonicalizeMetricName('А130283. Антитела к внутреннему фактору Кастла IgG (АВФ, Intrinsic factor antibodies, IgG), количеств.', 'руб.')).toBeNull()
+    expect(canonicalizeMetricName('А110006. Клинический анализ крови: общий анализ, лейкоцитарная формула, СОЭ (ОАК, ЛФ, СОЭ) с микроскопией мазка крови при наличии патологических сдвигов', 'руб.')).toBeNull()
+    expect(canonicalizeMetricName('Референтные пределы СОЭ по Вестергрену и интерпретация результатов')).toBeNull()
+  })
+
+  it('СОЭ, ферритин, креатинин (но не СКФ), белки, ЩФ, электролиты', () => {
+    expect(canonicalizeMetricName('Скорость оседания', 'мм/ч')).toBe('СОЭ')
+    expect(canonicalizeMetricName('Скорость оседания эритроцитов по Вестергрену', 'мм/ч')).toBe('СОЭ')
+    expect(canonicalizeMetricName('СОЭ по Вестергрену', 'мм/ч')).toBe('СОЭ')
+    expect(canonicalizeMetricName('Ферритин, массовая концентрация в сыворотке или плазме крови', 'нг/мл')).toBe('Ферритин')
+    expect(canonicalizeMetricName('Исследование уровня трансферрина сыворотки крови', 'г/л')).toBeNull()
+    expect(canonicalizeMetricName('Коэффициент насыщения трансферрина железом', '%')).toBeNull()
+    expect(canonicalizeMetricName('Креатинин, молярная концентрация в сыворотке или плазме крови', 'мкмоль/л')).toBe('Креатинин')
+    expect(canonicalizeMetricName('Скорость клубочковой фильтрации (СКФ) по креатинину на основе формулы CKD-EPI', 'мл/мин/1.73м^2')).toBeNull()
+    expect(canonicalizeMetricName('Креатинкиназа', 'Ед/л')).toBeNull()
+    expect(canonicalizeMetricName('Общий белок в сыворотке', 'г/л')).toBe('Общий белок')
+    expect(canonicalizeMetricName('Белок общий, массовая концентрация в сыворотке или плазме крови', 'г/л')).toBe('Общий белок')
+    expect(canonicalizeMetricName('Общий белок мочи, концентрация', 'г/л')).toBeNull()
+    expect(canonicalizeMetricName('Белок')).toBeNull()
+    expect(canonicalizeMetricName('Альбумин', 'г/л')).toBe('Альбумин')
+    expect(canonicalizeMetricName('Albumin', '%')).toBeNull() // фракция электрофореза
+    expect(canonicalizeMetricName('Определение активности щелочной фосфатазы в крови', 'Ед/л')).toBe('Щелочная фосфатаза')
+    expect(canonicalizeMetricName('щелочная фосфотаза', 'ЕД/л')).toBe('Щелочная фосфатаза')
+    expect(canonicalizeMetricName('Исследование уровня непрямого (свободного) билирубина в крови', 'мкмоль/л')).toBeNull()
+    expect(canonicalizeMetricName('Билирубин общий, молярная концентрация в сыворотке или плазме крови', 'мкмоль/л')).toBe('Билирубин общий')
+    expect(canonicalizeMetricName('Калий (К)', 'ммоль/л')).toBe('Калий')
+    expect(canonicalizeMetricName('Кальций (Са)', 'ммоль/л')).toBeNull()
+    expect(canonicalizeMetricName('Мочевая кислота', 'мкмоль/л')).toBeNull()
+    expect(canonicalizeMetricName('Гликированный гемоглобин (HbA1c)', '%')).toBe('Гликированный гемоглобин')
+    expect(canonicalizeMetricName('Анизоцитоз', 'балл')).toBeNull()
+  })
+})
+
+describe('buildMeasurementsDynamicsFromExtracted — фильтр правдоподобия', () => {
+  it('отбрасывает значения вне физиологического диапазона (цена, тромбокрит, процент)', () => {
+    const extracted: ExtractedDocument = {
+      documentType: 'анализ крови', documentDate: '2026-04-06', patientName: null, clinic: null, doctor: null,
+      pages: [{ pageNumber: 1, textBlocks: [], tables: [
+        { title: 'ОАК', dates: ['06.04.2026'], rows: [
+          { name: 'Лейкоциты', unit: null, normalMin: null, normalMax: null, values: [730] },
+          { name: 'Тромбоциты', unit: '10^9/л', normalMin: null, normalMax: null, values: [218] },
+          { name: 'СОЭ', unit: null, normalMin: null, normalMax: null, values: [120] },
+        ] },
+      ] }],
+    }
+    expect(buildMeasurementsDynamicsFromExtracted(extracted)).toEqual([
+      { name: 'Тромбоциты', unit: '10^9/л', values: [{ date: '2026-04-06', value: 218 }] },
+      { name: 'СОЭ', unit: '', values: [{ date: '2026-04-06', value: 120 }] },
+    ])
   })
 })

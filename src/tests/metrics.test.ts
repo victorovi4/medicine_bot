@@ -48,14 +48,19 @@ describe('METRICS_CONFIG', () => {
 
 describe('getActiveMetricsConfig', () => {
   it('по умолчанию (Иоффе) возвращает подмножество из trackingMetrics', () => {
-    // Default PATIENT.trackingMetrics = ['ПСА общий', 'ПСА свободный', 'Гемоглобин', 'СРБ']
+    // Default PATIENT.trackingMetrics (Иоффе): онкомаркеры, ОАК, воспаление, биохимия
     const active = getActiveMetricsConfig()
     const keys = Object.keys(active)
     expect(keys).toContain('ПСА общий')
     expect(keys).toContain('Гемоглобин')
+    expect(keys).toContain('СОЭ')
+    expect(keys).toContain('MCV')
+    expect(keys).toContain('Моноциты')
     // Не должен содержать метрики, не входящие в trackingMetrics по умолчанию
     expect(keys).not.toContain('Парапротеин')
-    expect(keys).not.toContain('Глюкоза')
+    expect(keys).not.toContain('Гликированный гемоглобин')
+    expect(keys).not.toContain('Нейтрофилы %')
+    expect(keys).not.toContain('ЛДГ')
   })
 
   it('должен возвращать только метрики из PATIENT.trackingMetrics', () => {
@@ -99,7 +104,9 @@ describe('getMetricConfig', () => {
     expect(getMetricConfig('Гемоглобин (HGB)')?.name).toBe('Гемоглобин')
     expect(getMetricConfig('Лейкоциты (WBC)')?.name).toBe('Лейкоциты')
     expect(getMetricConfig('Тромбоциты (PLT)')?.name).toBe('Тромбоциты')
-    expect(getMetricConfig('Эритроциты (RBC)')).toBeNull() // не отслеживаем
+    expect(getMetricConfig('Эритроциты (RBC)')?.name).toBe('Эритроциты')
+    expect(getMetricConfig('Средний объем эритроцита (MCV)')?.name).toBe('MCV')
+    expect(getMetricConfig('Ср. конц. гемоглобина в эр-те (MCHC)')).toBeNull() // производный показатель
   })
 
   it('должен возвращать null для неизвестных показателей', () => {
@@ -172,7 +179,7 @@ describe('extractMeasurements', () => {
   it('должен извлекать отслеживаемые показатели', () => {
     const keyValues = {
       'Гемоглобин': '130 г/л',
-      'СОЭ': '25 мм/ч', // не отслеживается
+      'Хлор в сыворотке': '100 ммоль/л', // не отслеживается
     }
     const result = extractMeasurements(keyValues)
     expect(result).toHaveLength(1)
@@ -220,14 +227,16 @@ describe('extractMeasurements', () => {
       'Гемоглобин (HGB)': '85 г/л [126-174]',
       'Лейкоциты (WBC)': '5.15 *10^9/л [4.0-10.0]',
       'Тромбоциты (PLT)': '346 *10^9/л [150-400]',
-      'Гематокрит (HCT)': '27.2 % [37-51]', // не отслеживается
+      'Гематокрит (HCT)': '27.2 % [37-51]',
+      'Средн. конц. гемоглобина в эр-те (MCHC)': '321 г/л [300-380]', // производный показатель — не отслеживается
     }
     const result = extractMeasurements(keyValues)
     const names = result.map(m => m.name)
     expect(names).toContain('Гемоглобин')
     expect(names).toContain('Лейкоциты')
     expect(names).toContain('Тромбоциты')
-    expect(names).not.toContain('Гематокрит')
+    expect(names).toContain('Гематокрит')
+    expect(names).toHaveLength(4)
     const hb = result.find(m => m.name === 'Гемоглобин')!
     expect(hb.value).toBe(85)
     expect(hb.normalMin).toBe(126)

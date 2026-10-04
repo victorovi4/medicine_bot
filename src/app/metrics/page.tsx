@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { MetricsChart } from '@/components/MetricsChart'
 import { ArrowLeft, RefreshCw, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { METRIC_GROUPS, type MetricGroup } from '@/lib/metrics-config'
 
 interface MetricDataPoint {
   date: string
@@ -21,6 +22,7 @@ interface MetricSummary {
   normalMin: number
   normalMax: number
   critical?: number
+  group: MetricGroup
   dataPoints: MetricDataPoint[]
   firstValue: number | null
   lastValue: number | null
@@ -114,6 +116,12 @@ export default function MetricsPage() {
   const metricsWithData = data?.metrics.filter(m => m.dataPoints.length > 0) || []
   const metricsWithoutData = data?.metrics.filter(m => m.dataPoints.length === 0) || []
 
+  // Группы показателей в порядке METRIC_GROUPS; пустые группы не показываем
+  const groups = (Object.keys(METRIC_GROUPS) as MetricGroup[])
+    .sort((a, b) => METRIC_GROUPS[a].order - METRIC_GROUPS[b].order)
+    .map(key => ({ key, label: METRIC_GROUPS[key].label, metrics: metricsWithData.filter(m => m.group === key) }))
+    .filter(g => g.metrics.length > 0)
+
   return (
     <main className="container mx-auto px-4 pb-8 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
@@ -176,7 +184,13 @@ export default function MetricsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {metricsWithData.map(metric => (
+                  {groups.map(group => [
+                    <tr key={`group-${group.key}`} className="border-b bg-[rgba(0,210,170,0.04)]">
+                      <td colSpan={7} className="py-2 px-3 text-xs font-semibold uppercase tracking-wide text-[rgba(204,232,225,0.5)]">
+                        {group.label}
+                      </td>
+                    </tr>,
+                    ...group.metrics.map(metric => (
                     <tr key={metric.name} className="border-b last:border-0">
                       <td className="py-3 px-3 font-medium">{metric.name}</td>
                       <td className="py-3 px-3 text-center">
@@ -205,7 +219,8 @@ export default function MetricsPage() {
                         <StatusBadge status={metric.lastStatus} />
                       </td>
                     </tr>
-                  ))}
+                    )),
+                  ])}
                 </tbody>
               </table>
             </div>
@@ -213,12 +228,15 @@ export default function MetricsPage() {
         </Card>
       )}
 
-      {/* Графики */}
-      {metricsWithData.length > 0 && (
-        <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-[#cce8e1]">Графики динамики</h2>
-          <div className="grid gap-6">
-            {metricsWithData.map(metric => (
+      {/* Графики — по группам показателей */}
+      {groups.map(group => (
+        <section key={group.key} className="space-y-4 mb-10" id={`group-${group.key}`}>
+          <h2 className="text-lg font-semibold text-[#cce8e1] flex items-baseline gap-2">
+            {group.label}
+            <span className="text-xs font-normal text-[rgba(204,232,225,0.4)]">{group.metrics.length} показ.</span>
+          </h2>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {group.metrics.map(metric => (
               <Card key={metric.name}>
                 <CardContent className="pt-6">
                   <MetricsChart metric={metric} procedures={data?.procedures ?? []} />
@@ -226,8 +244,8 @@ export default function MetricsPage() {
               </Card>
             ))}
           </div>
-        </div>
-      )}
+        </section>
+      ))}
 
       {/* Показатели без данных */}
       {metricsWithoutData.length > 0 && (

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getPrismaClient } from '@/lib/db'
 import { isTestModeRequest } from '@/lib/test-mode'
 import { getTreatmentStartDate } from '@/lib/patient'
-import { getActiveMetricsConfig, calculateChange, getValueStatus } from '@/lib/metrics'
+import { getActiveMetricsConfig, calculateChange, getValueStatus, type MetricGroup } from '@/lib/metrics'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -30,6 +30,7 @@ export interface MetricSummary {
   normalMin: number
   normalMax: number
   critical?: number
+  group: MetricGroup
   dataPoints: MetricDataPoint[]
   // Сводка
   firstValue: number | null
@@ -146,6 +147,7 @@ export async function GET(request: NextRequest) {
         normalMin: config.normalMin,
         normalMax: config.normalMax,
         critical: config.critical,
+        group: config.group,
         dataPoints,
         firstValue,
         lastValue,

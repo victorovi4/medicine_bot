@@ -12,6 +12,8 @@
  * где single-pass анализ путает строки между таблицами.
  */
 
+import { canonicalizeMetricName, URINE_RE } from '@/lib/metric-names'
+import { isPlausibleValue } from '@/lib/metrics-config'
 import Anthropic from '@anthropic-ai/sdk'
 import { PATIENT, getAge } from '@/lib/patient'
 import { ANALYSIS_MODEL, CHAT_MODEL, AnalysisResult } from '@/lib/claude'
@@ -285,121 +287,12 @@ export async function normalizeToAnalysis(extracted: ExtractedDocument): Promise
  */
 // ---------- Деterministic helpers (без LLM, чтобы не путать строки) ----------
 
-const METRIC_NAME_MAP: Record<string, string> = {
-  'hgb': 'Гемоглобин',
-  'гемоглобин': 'Гемоглобин',
-  'гемоглобина': 'Гемоглобин',
-  'hemoglobin': 'Гемоглобин',
-  'rbc': 'Эритроциты',
-  'эритроциты': 'Эритроциты',
-  'erythrocytes': 'Эритроциты',
-  'wbc': 'Лейкоциты',
-  'лейкоциты': 'Лейкоциты',
-  'leukocytes': 'Лейкоциты',
-  'plt': 'Тромбоциты',
-  'тромбоциты': 'Тромбоциты',
-  'platelets': 'Тромбоциты',
-  'hct': 'Гематокрит',
-  'гематокрит': 'Гематокрит',
-  'hematocrit': 'Гематокрит',
-  'soe': 'СОЭ',
-  'соэ': 'СОЭ',
-  'esr': 'СОЭ',
-  'алт': 'АЛТ',
-  'alt': 'АЛТ',
-  'аланинаминотрансфераза': 'АЛТ',
-  'аст': 'АСТ',
-  'ast': 'АСТ',
-  'аспартатаминотрансфераза': 'АСТ',
-  'глюкоза': 'Глюкоза',
-  'glucose': 'Глюкоза',
-  'креатинин': 'Креатинин',
-  'creatinine': 'Креатинин',
-  'мочевина': 'Мочевина',
-  'urea': 'Мочевина',
-  'ферритин': 'Ферритин',
-  'ferritin': 'Ферритин',
-  // Канонические имена должны совпадать с METRICS_CONFIG ключами (src/lib/metrics.ts),
-  // иначе /api/metrics не свяжет measurements с настроенными метриками.
-  'срб': 'СРБ',
-  'c-реактивный белок': 'СРБ',
-  'с-реактивный белок': 'СРБ',
-  'crp': 'СРБ',
-  'билирубин': 'Билирубин общий',
-  'общий билирубин': 'Билирубин общий',
-  'пса': 'ПСА общий',
-  'pca': 'ПСА общий',
-  'pca общий': 'ПСА общий',
-  'пса общий': 'ПСА общий',
-  'pca свободный': 'ПСА свободный',
-  'пса свободный': 'ПСА свободный',
-  // Короткие сокращения врачей в табличных консультативных заключениях.
-  // Только safe (>= 3 буквы, без false-positive на чужие показатели).
-  'гем': 'Гемоглобин',
-  'эргит': 'Эритроциты',
-  'лей': 'Лейкоциты',
-  'лейк': 'Лейкоциты',
-  'тромб': 'Тромбоциты',
-}
-
-// Подметрики и дополнительные показатели CBC/биохимии, которые содержат подстроку
-// "гемоглобин" / "эритроц" и т.п., но НЕ являются основной метрикой.
-// MCHC (Средняя концентрация гемоглобина в эритроците, ~330 г/л) — частый источник
-// ложных точек "Гемоглобин = 339" на графиках.
-const EXCLUDE_SUBSTRINGS = [
-  'mchc', 'mch ', '(mch)', 'mcv', 'mpv', 'rdw', 'pdw', 'p-lcr', 'plcr',
-  'средн', // "средняя концентрация ...", "среднее содержание ..."
-  'ширин', // "ширина распределения ..."
-  'распред', // "распределение эритроцитов по объему"
-  'коэф',  // "коэффициент больших тромбоцитов"
-  'объем', // "средний объем тромбоцита/эритроцита"
-  'содерж', // "содержание крупных тромбоцитов"
-  'крупн',
-  'незрел', // "незрелые гранулоциты"
-  'гликир', // "гликированный гемоглобин" — отдельная метрика (HbA1c)
-  'нrbc', 'nrbc',
-  // Соотношения и индексы: "Соотношение ПСА свободный/ПСА общий" (в %) — не ПСА общий.
-  'соотнош', 'отношен', 'индекс', 'ratio', '/пса',
-]
-
-// Показатели мочи ("Лейкоциты [#/объем] в моче", "Белок мочи"), но не "мочевина"/"мочевая кислота".
-const URINE_RE = /моч(?!ев)/
-
-// Ключи от длинных к коротким: "пса свободный" должен победить "пса".
-const METRIC_KEYS_BY_LENGTH = Object.entries(METRIC_NAME_MAP).sort((a, b) => b[0].length - a[0].length)
-
-export function canonicalizeMetricName(rowName: string | undefined | null): string | null {
-  if (!rowName) return null
-  // Квалификаторы в квадратных скобках ("[масса / объем]", "[# / объем]") — служебные, убираем целиком,
-  // иначе "Гемоглобин [масса / объем] в крови" отсекается исключением 'объем'.
-  // Содержимое круглых скобок оставляем: там аббревиатуры ("Гемоглобин (HGB)").
-  const cleaned = rowName
-    .replace(/\[[^\]]*\]/g, ' ')
-    .replace(/[(){}]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase()
-  if (cleaned.length < 2) return null
-  // Эвристика для подметрик CBC и др. показателей-производных — отсекаем заранее.
-  for (const ex of EXCLUDE_SUBSTRINGS) {
-    if (cleaned.includes(ex)) return null
-  }
-  if (URINE_RE.test(cleaned)) return null
-  // Сначала точное совпадение
-  if (METRIC_NAME_MAP[cleaned]) return METRIC_NAME_MAP[cleaned]
-  // Затем substring matching: ключ внутри cleaned, либо cleaned — начало ключа ("тромб" → "тромбоциты").
-  // Cleaned должен быть достаточно длинным (>= 3) чтобы не дать ложных совпадений
-  // (например "ал" не должен матчиться на "алт", "белок" — на "с-реактивный белок").
-  for (const [key, canonical] of METRIC_KEYS_BY_LENGTH) {
-    if (cleaned.includes(key)) return canonical
-    if (cleaned.length >= 3 && key.startsWith(cleaned)) return canonical
-  }
-  return null
-}
+// Канонизация названий показателей вынесена в src/lib/metric-names.ts (общая для таблиц и keyValues).
+export { canonicalizeMetricName } from '@/lib/metric-names'
 
 // Строки, у которых название показателя стоит в заголовке таблицы (формат Хеликса):
 // "## Простатспецифический антиген (ПСА) общий" → "Концентрация: 0.029 нг/мл".
-const GENERIC_ROW_RE = /^(концентрация|результат|значение|уровень|количество)$/i
+const GENERIC_ROW_RE = /^(концентрация|активность|результат|значение|уровень|количество)$/i
 
 /**
  * Преобразует дату из "DD.MM.YYYY" / "DD.MM.YYYY HH:MM" / "YYYY-MM-DD" в ISO YYYY-MM-DD.
@@ -433,7 +326,7 @@ export function buildMeasurementsDynamicsFromExtracted(extracted: ExtractedDocum
       if (URINE_RE.test((table.title || '').toLowerCase())) continue
       const rows = table.rows || []
       for (const row of rows) {
-        let canonical = canonicalizeMetricName(row.name)
+        let canonical = canonicalizeMetricName(row.name, row.unit)
         if (!canonical && (rows.length === 1 || GENERIC_ROW_RE.test((row.name || '').trim()))) {
           canonical = canonicalizeMetricName(table.title)
         }
@@ -442,7 +335,7 @@ export function buildMeasurementsDynamicsFromExtracted(extracted: ExtractedDocum
         for (let i = 0; i < dates.length; i++) {
           const v = row.values?.[i]
           const dateStr = parseExtractedDate(dates[i])
-          if (typeof v === 'number' && !Number.isNaN(v) && dateStr) {
+          if (typeof v === 'number' && !Number.isNaN(v) && dateStr && isPlausibleValue(canonical, v)) {
             values.push({ date: dateStr, value: v })
           }
         }
