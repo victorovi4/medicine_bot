@@ -248,3 +248,12 @@ describe('buildMeasurementsDynamicsFromExtracted — фильтр правдоп
     ])
   })
 })
+
+describe('canonicalizeMetricName — клетки в микролитре (моча) не кровь', () => {
+  it('отбрасывает лейкоциты/эритроциты в клет/мкл', () => {
+    expect(canonicalizeMetricName('Лейкоциты', 'клет/мкл')).toBeNull()
+    expect(canonicalizeMetricName('Эритроциты', 'клет/мкл')).toBeNull()
+    expect(canonicalizeMetricName('Лейкоциты', '/мкл')).toBeNull()
+    expect(canonicalizeMetricName('Лейкоциты (WBC)', '10^9/л')).toBe('Лейкоциты')
+  })
+})

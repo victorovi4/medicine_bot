@@ -3,8 +3,9 @@
  *
  * Источник — сохранённый fullText (content) документа: в нём лежат таблицы в формате
  * buildFullTextFromExtracted. Если таблиц нет — keyValues (как при загрузке).
- * Документы, из которых ничего не извлекается, но measurements уже есть (старый пайплайн),
- * не трогаем.
+ * Документы старого пайплайна (без таблиц two-pass и без keyValues), из которых ничего не извлекается,
+ * но measurements уже есть — не трогаем. Документ С таблицами и нулём кандидатов пересобираем:
+ * его старые measurements — ложные точки прежней канонизации (цены прайс-листа, анализ мочи).
  *
  * Порядок обработки как в scripts/reanalyze-all.sh --priority-sort: сначала первичные анализы,
  * потом выписки, исследования, остальное — чтобы при дедупе значение оставалось за первоисточником.
@@ -65,6 +66,13 @@ function priority(doc: RebuildDocument): number {
   return 4
 }
 
+/** Старый пайплайн: нет таблиц two-pass (## заголовки) и нет keyValues — пересобирать нечего. */
+export function isLegacyDocument(doc: Pick<RebuildDocument, 'content' | 'keyValues'>): boolean {
+  const hasTables = /(^|\n)## /.test(doc.content || '')
+  const hasKeyValues = !!doc.keyValues && typeof doc.keyValues === 'object' && Object.keys(doc.keyValues as object).length > 0
+  return !hasTables && !hasKeyValues
+}
+
 const point = (m: { date: Date; value: number }) => `${m.date.toISOString().slice(0, 10)} ${m.value}`
 
 export async function rebuildMeasurements(prisma: PrismaClient, options: { apply: boolean }) {
@@ -81,7 +89,7 @@ export async function rebuildMeasurements(prisma: PrismaClient, options: { apply
   }
 
   const plans = documents.map(doc => ({ doc, candidates: candidatesForDocument(doc) }))
-  const kept = plans.filter(p => p.candidates.length === 0 && existingByDoc.has(p.doc.id))
+  const kept = plans.filter(p => p.candidates.length === 0 && existingByDoc.has(p.doc.id) && isLegacyDocument(p.doc))
   const rebuilt = plans
     .filter(p => !kept.includes(p))
     .sort((a, b) => priority(a.doc) - priority(b.doc) || a.doc.date.getTime() - b.doc.date.getTime())

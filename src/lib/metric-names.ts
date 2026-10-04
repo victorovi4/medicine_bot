@@ -26,6 +26,9 @@ export const URINE_RE = /моч(?!ев)/
 // цены прайс-листа, баллы микроскопии, размеры и дозы на КТ/УЗИ/ЭКГ, время свёртывания.
 const JUNK_UNIT_RE = /руб|балл|мзв|град|мм²|mm|µm|см3|см³|^кг$|м2$|^мс$|^с\.?$|^сек/i
 
+// Клетки в микролитре — микроскопия мочи/ликвора, не кровь: "Лейкоциты: 1 клет/мкл".
+const PER_MICROLITER_UNIT_RE = /мкл|клет|\/ul\b|\/µl/i
+
 // Коды услуг прайс-листа: "А110006. Клинический анализ крови...", "A130215. Антитела..."
 const PRICE_CODE_RE = /^[aа]\d{5,}/
 
@@ -145,6 +148,7 @@ export function canonicalizeMetricName(rowName: string | undefined | null, unit?
   const unitIsPercent = unitLower.includes('%')
 
   if (unitLower && JUNK_UNIT_RE.test(unitLower)) return null
+  if (unitLower && PER_MICROLITER_UNIT_RE.test(unitLower)) return null
   if (PRICE_CODE_RE.test(cleaned)) return null
   if (URINE_RE.test(cleaned)) return null
 
